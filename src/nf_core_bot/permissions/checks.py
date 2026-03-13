@@ -24,12 +24,26 @@ CACHE_TTL: int = 300  # 5 minutes
 
 _core_team_ids: set[str] = set()
 _core_team_fetched_at: float = 0.0
+_core_team_lock: asyncio.Lock | None = None
+
+
+def _get_core_team_lock() -> asyncio.Lock:
+    """Return (and lazily create) the async lock for core-team refresh.
+
+    Created lazily because ``asyncio.Lock`` must be instantiated inside a
+    running event loop.
+    """
+    global _core_team_lock  # noqa: PLW0603
+    if _core_team_lock is None:
+        _core_team_lock = asyncio.Lock()
+    return _core_team_lock
 
 
 async def refresh_core_team(client: AsyncWebClient, usergroup_handle: str) -> set[str]:
     """Fetch members of the ``@core-team`` user-group from Slack.
 
-    Caches the result for ``CACHE_TTL`` seconds.
+    Caches the result for ``CACHE_TTL`` seconds.  An async lock prevents
+    concurrent requests from firing redundant API calls.
     """
     global _core_team_ids, _core_team_fetched_at  # noqa: PLW0603
 
@@ -37,30 +51,36 @@ async def refresh_core_team(client: AsyncWebClient, usergroup_handle: str) -> se
     if _core_team_ids and (now - _core_team_fetched_at) < CACHE_TTL:
         return _core_team_ids
 
-    logger.info("Refreshing @%s user-group membership …", usergroup_handle)
-    try:
-        # First, resolve the handle to a usergroup ID.
-        groups_resp = await client.usergroups_list(include_users=False)
-        groups: list[dict[str, Any]] = groups_resp.get("usergroups", [])
-        group_id: str | None = None
-        for group in groups:
-            if group.get("handle") == usergroup_handle:
-                group_id = group["id"]
-                break
-
-        if group_id is None:
-            logger.warning("User-group @%s not found.", usergroup_handle)
-            _core_team_ids = set()
-            _core_team_fetched_at = now
+    async with _get_core_team_lock():
+        # Double-check after acquiring the lock.
+        now = time.monotonic()
+        if _core_team_ids and (now - _core_team_fetched_at) < CACHE_TTL:
             return _core_team_ids
 
-        # Fetch the members of that group.
-        members_resp = await client.usergroups_users_list(usergroup=group_id)
-        _core_team_ids = set(members_resp.get("users", []))
-        _core_team_fetched_at = now
-        logger.info("Cached %d @%s members.", len(_core_team_ids), usergroup_handle)
-    except Exception:
-        logger.exception("Failed to refresh @%s membership.", usergroup_handle)
+        logger.info("Refreshing @%s user-group membership …", usergroup_handle)
+        try:
+            # First, resolve the handle to a usergroup ID.
+            groups_resp = await client.usergroups_list(include_users=False)
+            groups: list[dict[str, Any]] = groups_resp.get("usergroups", [])
+            group_id: str | None = None
+            for group in groups:
+                if group.get("handle") == usergroup_handle:
+                    group_id = group["id"]
+                    break
+
+            if group_id is None:
+                logger.warning("User-group @%s not found.", usergroup_handle)
+                _core_team_ids = set()
+                _core_team_fetched_at = now
+                return _core_team_ids
+
+            # Fetch the members of that group.
+            members_resp = await client.usergroups_users_list(usergroup=group_id)
+            _core_team_ids = set(members_resp.get("users", []))
+            _core_team_fetched_at = now
+            logger.info("Cached %d @%s members.", len(_core_team_ids), usergroup_handle)
+        except Exception:
+            logger.exception("Failed to refresh @%s membership.", usergroup_handle)
 
     return _core_team_ids
 

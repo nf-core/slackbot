@@ -17,7 +17,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from nf_core_bot.checks.github import add_to_team, invite_to_org
-from nf_core_bot.checks.slack_profile import get_github_username
+from nf_core_bot.checks.slack_profile import get_github_username, normalise_github_username
 from nf_core_bot.permissions.checks import is_core_team
 
 if TYPE_CHECKING:
@@ -67,8 +67,15 @@ async def handle_add_member(
                 await _warn_missing_github(client, channel_id, thread_ts, target_user_id)
                 return
         else:
-            # Treat it as a plain GitHub username
-            github_username = target
+            # Treat it as a plain GitHub username — validate first
+            github_username = normalise_github_username(target)
+            if github_username is None:
+                await respond(
+                    f"That doesn't look like a valid GitHub username: `{target}`\n"
+                    "GitHub usernames are 1-39 characters, alphanumeric and hyphens only.",
+                    response_type="ephemeral",
+                )
+                return
     else:
         # No argument — must be in a thread; resolve from thread starter
         if not thread_ts:
@@ -97,7 +104,20 @@ async def handle_add_member(
 
     # ── 3. Invite to org + add to contributors team ──────────────────
 
-    org_result = await invite_to_org(github_username)
+    await respond(f"Looking up `{github_username}` on GitHub…", response_type="ephemeral")
+
+    try:
+        org_result = await invite_to_org(github_username)
+    except Exception:
+        logger.exception("Network error inviting %s to org", github_username)
+        await _thread_reply(
+            client,
+            channel_id,
+            thread_ts,
+            f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later.",
+        )
+        return
+
     if not org_result.ok:
         await _thread_reply(
             client,
@@ -107,7 +127,19 @@ async def handle_add_member(
         )
         return
 
-    team_result = await add_to_team(github_username)
+    try:
+        team_result = await add_to_team(github_username)
+    except Exception:
+        logger.exception("Network error adding %s to team", github_username)
+        await _thread_reply(
+            client,
+            channel_id,
+            thread_ts,
+            f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
+            "when adding to the contributors team. Please try again later.",
+        )
+        return
+
     if not team_result.ok:
         msg = (
             f"Invited `{github_username}` to the org, but failed to add to the "

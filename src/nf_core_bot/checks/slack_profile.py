@@ -9,6 +9,7 @@ The discovered field ID is cached for the process lifetime.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -22,6 +23,19 @@ logger = logging.getLogger(__name__)
 
 _github_field_id: str | None = None
 _github_field_resolved: bool = False
+_github_field_lock: asyncio.Lock | None = None
+
+
+def _get_github_field_lock() -> asyncio.Lock:
+    """Return (and lazily create) the async lock for field-ID resolution.
+
+    The lock is created on first use rather than at import time because
+    ``asyncio.Lock`` must be created inside a running event loop.
+    """
+    global _github_field_lock  # noqa: PLW0603
+    if _github_field_lock is None:
+        _github_field_lock = asyncio.Lock()
+    return _github_field_lock
 
 
 async def _resolve_github_field_id(client: AsyncWebClient) -> str | None:
@@ -29,32 +43,42 @@ async def _resolve_github_field_id(client: AsyncWebClient) -> str | None:
 
     Calls ``team.profile.get`` once and caches the result.  Returns ``None``
     if no field with a GitHub-related label is found.
+
+    An async lock ensures concurrent callers don't fire redundant API calls.
     """
     global _github_field_id, _github_field_resolved  # noqa: PLW0603
 
     if _github_field_resolved:
         return _github_field_id
 
-    try:
-        resp = await client.api_call("team.profile.get")
-        profile_data: dict[str, Any] = resp.get("profile", {})
-        fields: list[dict[str, Any]] = profile_data.get("fields", [])
-        for field in fields:
-            label = (field.get("label") or "").lower()
-            if "github" in label:
-                _github_field_id = field["id"]
-                logger.info(
-                    "Resolved GitHub profile field: id=%s label=%r",
-                    _github_field_id,
-                    field.get("label"),
-                )
-                break
-        else:
-            logger.warning("No GitHub custom profile field found in workspace.")
-    except Exception:
-        logger.exception("Failed to call team.profile.get")
+    async with _get_github_field_lock():
+        # Double-check after acquiring the lock — another coroutine may
+        # have resolved it while we were waiting.
+        if _github_field_resolved:
+            return _github_field_id
 
-    _github_field_resolved = True
+        try:
+            resp = await client.api_call("team.profile.get")
+            profile_data: dict[str, Any] = resp.get("profile", {})
+            fields: list[dict[str, Any]] = profile_data.get("fields", [])
+            for field in fields:
+                label = (field.get("label") or "").lower()
+                if "github" in label:
+                    _github_field_id = field["id"]
+                    logger.info(
+                        "Resolved GitHub profile field: id=%s label=%r",
+                        _github_field_id,
+                        field.get("label"),
+                    )
+                    break
+            else:
+                logger.warning("No GitHub custom profile field found in workspace.")
+            # Only cache when the API call succeeded — a transient failure
+            # should not permanently disable GitHub username resolution.
+            _github_field_resolved = True
+        except Exception:
+            logger.exception("Failed to call team.profile.get — will retry on next call")
+
     return _github_field_id
 
 
@@ -79,13 +103,13 @@ async def get_github_username(client: AsyncWebClient, user_id: str) -> str | Non
         if not raw_value:
             return None
 
-        return _normalise_github_username(raw_value)
+        return normalise_github_username(raw_value)
     except Exception:
         logger.exception("Failed to read profile for user %s", user_id)
         return None
 
 
-def _normalise_github_username(raw: str) -> str | None:
+def normalise_github_username(raw: str) -> str | None:
     """Extract a bare GitHub username from various input formats.
 
     Handles:
@@ -99,10 +123,10 @@ def _normalise_github_username(raw: str) -> str | None:
     # URL form
     url_match = re.match(r"(?:https?://)?github\.com/([A-Za-z0-9_.-]+)", raw)
     if url_match:
-        return url_match.group(1)
+        raw = url_match.group(1)  # fall through to validation below
 
     # @-prefixed
-    if raw.startswith("@"):
+    elif raw.startswith("@"):
         raw = raw[1:]
 
     # Validate: GitHub usernames are alphanumeric + hyphens, 1-39 chars
