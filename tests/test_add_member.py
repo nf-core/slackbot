@@ -57,8 +57,9 @@ class TestBareUsername:
         final_text = client.chat_postMessage.call_args.kwargs.get(
             "text", client.chat_postMessage.call_args[1].get("text", "")
         )
-        assert "invite" in final_text.lower()
+        assert "welcome" in final_text.lower()
         assert "nf-core/invitation" in final_text
+        assert "<@U_ADMIN>" in final_text  # mentions who triggered it
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     async def test_invalid_username_rejected(self, _perm: AsyncMock) -> None:
@@ -115,6 +116,11 @@ class TestSlackMention:
 
         mock_ghuser.assert_awaited_once_with(client, "U01234TARGET")
         mock_org.assert_awaited_once_with("octocat")
+        # Success message should greet the target user by Slack mention
+        last_call = client.chat_postMessage.call_args_list[-1]
+        text = last_call.kwargs["text"]
+        assert "<@U01234TARGET>" in text  # greeting addresses the target
+        assert "<@U_ADMIN>" in text  # mentions who triggered it
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member.get_github_username", return_value=None)

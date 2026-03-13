@@ -54,6 +54,8 @@ async def handle_add_member(
     thread_ts: str = command.get("thread_ts", "")
 
     # ── 2. Determine target ──────────────────────────────────────────
+    target_user_id: str | None = None  # Slack user ID, if known
+
     if args:
         # Explicit argument — could be a Slack mention or a GitHub username
         target = args[0]
@@ -132,12 +134,15 @@ async def handle_add_member(
         await _thread_reply(client, channel_id, thread_ts, msg)
         return
 
+    greeting = f"Hi <@{target_user_id}>, " if target_user_id else f"Hi `{github_username}`, "
     await _thread_reply(
         client,
         channel_id,
         thread_ts,
-        f"Sent `{github_username}` an invite to the nf-core GitHub organisation and *contributors* team.\n"
-        "They can accept at: https://github.com/orgs/nf-core/invitation",
+        f"{greeting}<@{user_id}> has just added you to the nf-core GitHub organisation, "
+        "welcome! :tada:\n\n"
+        "You should have received an invite — you can either check your e-mail "
+        "or click on this link to accept: https://github.com/orgs/nf-core/invitation",
     )
 
 
