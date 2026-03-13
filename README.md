@@ -103,6 +103,12 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 
 /nf-core-bot hackathon admin add-organiser <hackathon-id> <site-id> @user
 /nf-core-bot hackathon admin remove-organiser <hackathon-id> <site-id> @user
+
+# GitHub commands (@core-team only)
+/nf-core-bot github help
+/nf-core-bot github add-member                  # In a thread — invites the thread starter
+/nf-core-bot github add-member @slack-user       # Invite a specific Slack user
+/nf-core-bot github add-member <github-username> # Invite by GitHub username directly
 ```
 
 **Notes:**
@@ -110,6 +116,7 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 - Slack allows only one slash command per app — `/nf-core-bot` is the entry point, everything else is parsed as subcommands
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
 - All responses to commands are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
+- Exception: `github add-member` posts **visible thread replies** so the original requester can see the outcome
 - `help` at each level only shows commands the caller has permission to use
 
 ## Form Configuration
@@ -266,6 +273,9 @@ nf-core-bot/
 │       │   │   ├── register.py  # register, edit, cancel
 │       │   │   ├── attendees.py
 │       │   │   └── admin.py     # create, open, close, archive, sites, organisers
+│       │   ├── github/
+│       │   │   ├── __init__.py
+│       │   │   └── add_member.py # invite user to nf-core org + contributors team
 │       │   └── community/       # Future: audit commands
 │       │       └── __init__.py
 │       ├── forms/
@@ -302,7 +312,7 @@ nf-core-bot/
 - Docker (for local DynamoDB)
 - A Slack app configured with:
   - Slash command: `/nf-core-bot`
-  - Bot token scopes: `commands`, `chat:write`, `users:read`, `users.profile:read`, `usergroups:read`, `channels:manage`, `groups:write`
+  - Bot token scopes: `commands`, `chat:write`, `users:read`, `users.profile:read`, `usergroups:read`, `channels:manage`, `groups:write`, `channels:history`, `groups:history`
   - Interactivity enabled (for modals)
   - Request URL pointed at your dev tunnel (ngrok or similar)
 
@@ -331,7 +341,7 @@ python -m nf_core_bot.app
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
 SLACK_APP_TOKEN=xapp-...  # Only if using socket mode for dev
-GITHUB_TOKEN=ghp_...      # For org membership checks (fine-grained, read:org)
+GITHUB_TOKEN=ghp_...      # For org membership checks + invitations (admin:org)
 DYNAMODB_TABLE=nf-core-bot
 DYNAMODB_ENDPOINT=http://localhost:8000  # For local dev only
 CORE_TEAM_USERGROUP_HANDLE=core-team

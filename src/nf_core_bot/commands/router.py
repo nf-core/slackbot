@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from nf_core_bot.commands.github.add_member import handle_add_member
 from nf_core_bot.commands.hackathon.admin import (
     handle_admin_add_organiser,
     handle_admin_add_site,
@@ -27,7 +28,7 @@ from nf_core_bot.commands.hackathon.register import (
     handle_edit,
     handle_register,
 )
-from nf_core_bot.commands.help import handle_hackathon_help, handle_help
+from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -90,6 +91,11 @@ async def dispatch(
     # ── Hackathon commands ───────────────────────────────────────────
     if sub == "hackathon":
         await _route_hackathon(ack, respond, client, user_id, rest)
+        return
+
+    # ── GitHub commands ──────────────────────────────────────────────
+    if sub == "github":
+        await _route_github(ack, respond, client, user_id, command, rest)
         return
 
     # ── Unknown ──────────────────────────────────────────────────────
@@ -164,3 +170,38 @@ async def _route_admin(
         await handler(ack, respond)  # type: ignore[operator]
     else:
         await handler(ack, respond, rest)  # type: ignore[operator]
+
+
+# ── GitHub dispatch ──────────────────────────────────────────────────
+
+_GITHUB_DISPATCH: dict[str, object] = {
+    "add-member": handle_add_member,
+}
+
+
+async def _route_github(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    command: dict[str, str],
+    tokens: list[str],
+) -> None:
+    """Dispatch ``/nf-core-bot github <sub> [args…]``."""
+    if not tokens or tokens[0].lower() == "help":
+        await handle_github_help(ack, respond, client, user_id)
+        return
+
+    sub = tokens[0].lower()
+    rest = tokens[1:]
+
+    handler = _GITHUB_DISPATCH.get(sub)
+    if handler is None:
+        await ack()
+        await respond(
+            f"Unknown github command: `{sub}`. Run `/nf-core-bot github help` for options.",
+            response_type="ephemeral",
+        )
+        return
+
+    await handler(ack, respond, client, user_id, command, rest)  # type: ignore[operator]

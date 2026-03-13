@@ -58,6 +58,7 @@ mypy src/
 - `src/nf_core_bot/app.py` — Bolt app entrypoint and slash command registration
 - `src/nf_core_bot/commands/router.py` — Parses subcommands, dispatches to handlers
 - `src/nf_core_bot/commands/hackathon/` — All hackathon-related command handlers
+- `src/nf_core_bot/commands/github/` — GitHub org management commands (add-member)
 - `src/nf_core_bot/forms/` — YAML loader, Block Kit builder, modal submission handlers
 - `src/nf_core_bot/checks/` — GitHub API and Slack profile validation
 - `src/nf_core_bot/db/` — DynamoDB client and data access layer
@@ -87,4 +88,6 @@ mypy src/
 - Slack gives 3 seconds to acknowledge interactions — ack immediately, do async work after
 - The `@core-team` user group membership is cached and refreshed every 5 minutes
 - Form YAML supports `options_from: sites` for dynamic option lists populated from DynamoDB
-- GitHub API calls use a fine-grained PAT with `read:org` scope
+- GitHub API calls use a fine-grained PAT with `admin:org` scope (needed for org invitations and team management)
+- The `github add-member` command posts visible thread replies (not ephemeral) so the original requester can see them
+- Slack profile GitHub field ID is discovered dynamically via `team.profile.get` and cached for the process lifetime

@@ -33,9 +33,16 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("hackathon admin remove-organiser <hackathon> <site> @user", "Remove a site organiser", "admin"),
 ]
 
+GITHUB_COMMANDS: list[tuple[str, str, str]] = [
+    ("github add-member", "Invite thread starter to nf-core GitHub org (use in a thread)", "admin"),
+    ("github add-member @user", "Invite a Slack user to nf-core GitHub org", "admin"),
+    ("github add-member <username>", "Invite a GitHub user to nf-core GitHub org", "admin"),
+]
+
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
     ("hackathon help", "Show hackathon commands", "all"),
+    ("github help", "Show GitHub commands (@core-team only)", "admin"),
 ]
 
 
@@ -56,9 +63,20 @@ async def handle_help(
     """Top-level help: ``/nf-core-bot help``."""
     await ack()
 
+    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
+    assert usergroup is not None  # has default
+    admin = await is_core_team(client, user_id, usergroup)
+
+    visible: list[tuple[str, str, str]] = []
+    for cmd, desc, role in GENERAL_COMMANDS:
+        if role == "all" or role == "admin" and admin:
+            visible.append((cmd, desc, role))
+
     sections: list[str] = ["*nf-core bot — available commands*\n"]
-    sections.append(_format_commands(GENERAL_COMMANDS))
+    sections.append(_format_commands(visible))
     sections.append("\nRun `/nf-core-bot hackathon help` for hackathon commands.")
+    if admin:
+        sections.append("Run `/nf-core-bot github help` for GitHub commands.")
 
     await respond("\n".join(sections), response_type="ephemeral")
 
@@ -91,5 +109,34 @@ async def handle_hackathon_help(
 
     sections = ["*Hackathon commands*\n"]
     sections.append(_format_commands(visible))
+
+    await respond("\n".join(sections), response_type="ephemeral")
+
+
+async def handle_github_help(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+) -> None:
+    """GitHub-scoped help: ``/nf-core-bot github help``.
+
+    Only visible to @core-team members.
+    """
+    await ack()
+
+    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
+    assert usergroup is not None  # has default
+    admin = await is_core_team(client, user_id, usergroup)
+
+    if not admin:
+        await respond(
+            "Sorry, GitHub commands are restricted to `@core-team` members.",
+            response_type="ephemeral",
+        )
+        return
+
+    sections = ["*GitHub commands* (`@core-team` only)\n"]
+    sections.append(_format_commands(GITHUB_COMMANDS))
 
     await respond("\n".join(sections), response_type="ephemeral")
