@@ -6,6 +6,7 @@ API and cached for ``CACHE_TTL`` seconds to avoid hitting rate limits.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -64,8 +65,15 @@ async def refresh_core_team(client: AsyncWebClient, usergroup_handle: str) -> se
     return _core_team_ids
 
 
-async def is_core_team(client: AsyncWebClient, user_id: str, usergroup_handle: str) -> bool:
-    """Return True if *user_id* is in the @core-team user-group."""
+async def is_core_team(client: AsyncWebClient, user_id: str, usergroup_handle: str | None = None) -> bool:
+    """Return True if *user_id* is in the @core-team user-group.
+
+    If *usergroup_handle* is not provided, it is read from config.
+    """
+    if usergroup_handle is None:
+        from nf_core_bot import config
+
+        usergroup_handle = config.CORE_TEAM_USERGROUP_HANDLE or "core-team"
     members = await refresh_core_team(client, usergroup_handle)
     return user_id in members
 
@@ -82,7 +90,7 @@ async def is_site_organiser(user_id: str, hackathon_id: str, site_id: str) -> bo
         "PK": f"HACKATHON#{hackathon_id}",
         "SK": f"SITE#{site_id}#ORG#{user_id}",
     }
-    resp = table.get_item(Key=key)
+    resp = await asyncio.to_thread(table.get_item, Key=key)
     return "Item" in resp
 
 
@@ -94,7 +102,8 @@ async def is_organiser_any_site(user_id: str, hackathon_id: str) -> bool:
     table = get_table()
     from boto3.dynamodb.conditions import Key
 
-    resp = table.query(
+    resp = await asyncio.to_thread(
+        table.query,
         KeyConditionExpression=Key("PK").eq(f"HACKATHON#{hackathon_id}") & Key("SK").begins_with("SITE#"),
         FilterExpression="contains(SK, :org_suffix)",
         ExpressionAttributeValues={":org_suffix": f"#ORG#{user_id}"},

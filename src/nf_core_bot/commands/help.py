@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nf_core_bot import config
 from nf_core_bot.permissions.checks import is_core_team
 
 if TYPE_CHECKING:
@@ -63,13 +62,11 @@ async def handle_help(
     """Top-level help: ``/nf-core-bot help``."""
     await ack()
 
-    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
-    assert usergroup is not None  # has default
-    admin = await is_core_team(client, user_id, usergroup)
+    admin = await is_core_team(client, user_id)
 
     visible: list[tuple[str, str, str]] = []
     for cmd, desc, role in GENERAL_COMMANDS:
-        if role == "all" or role == "admin" and admin:
+        if (role == "all") or (role == "admin" and admin):
             visible.append((cmd, desc, role))
 
     sections: list[str] = ["*nf-core bot — available commands*\n"]
@@ -93,9 +90,7 @@ async def handle_hackathon_help(
     """
     await ack()
 
-    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
-    assert usergroup is not None  # has default
-    admin = await is_core_team(client, user_id, usergroup)
+    admin = await is_core_team(client, user_id)
 
     # For organiser check we'd need a hackathon id; show organiser commands
     # if the user is an admin (they implicitly have organiser access) or if
@@ -104,7 +99,7 @@ async def handle_hackathon_help(
 
     visible: list[tuple[str, str, str]] = []
     for cmd, desc, role in HACKATHON_COMMANDS:
-        if role == "all" or role == "organiser" and (organiser or admin) or role == "admin" and admin:
+        if (role == "all") or (role == "organiser" and (organiser or admin)) or (role == "admin" and admin):
             visible.append((cmd, desc, role))
 
     sections = ["*Hackathon commands*\n"]
@@ -125,9 +120,7 @@ async def handle_github_help(
     """
     await ack()
 
-    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
-    assert usergroup is not None  # has default
-    admin = await is_core_team(client, user_id, usergroup)
+    admin = await is_core_team(client, user_id)
 
     if not admin:
         await respond(

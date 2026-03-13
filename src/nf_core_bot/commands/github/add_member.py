@@ -16,7 +16,6 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from nf_core_bot import config
 from nf_core_bot.checks.github import add_to_team, invite_to_org
 from nf_core_bot.checks.slack_profile import get_github_username
 from nf_core_bot.permissions.checks import is_core_team
@@ -44,9 +43,7 @@ async def handle_add_member(
     await ack()
 
     # ── 1. Permission check ──────────────────────────────────────────
-    usergroup = config.CORE_TEAM_USERGROUP_HANDLE
-    assert usergroup is not None
-    if not await is_core_team(client, user_id, usergroup):
+    if not await is_core_team(client, user_id):
         await respond(
             "Sorry, this command is restricted to `@core-team` members.",
             response_type="ephemeral",
@@ -54,6 +51,7 @@ async def handle_add_member(
         return
 
     channel_id: str = command.get("channel_id", "")
+    thread_ts: str = command.get("thread_ts", "")
 
     # ── 2. Determine target ──────────────────────────────────────────
     if args:
@@ -66,14 +64,13 @@ async def handle_add_member(
             target_user_id = mention_match.group(1)
             github_username = await get_github_username(client, target_user_id)
             if github_username is None:
-                await _warn_missing_github(client, channel_id, target_user_id, command)
+                await _warn_missing_github(client, channel_id, thread_ts, target_user_id)
                 return
         else:
             # Treat it as a plain GitHub username
             github_username = target
     else:
         # No argument — must be in a thread; resolve from thread starter
-        thread_ts = command.get("thread_ts", "")
         if not thread_ts:
             await respond(
                 "Usage: `/nf-core-bot github add-member [@user | github-username]`\n"
@@ -95,11 +92,10 @@ async def handle_add_member(
 
         github_username = await get_github_username(client, target_user_id)
         if github_username is None:
-            await _warn_missing_github(client, channel_id, target_user_id, command)
+            await _warn_missing_github(client, channel_id, thread_ts, target_user_id)
             return
 
     # ── 3. Invite to org + add to contributors team ──────────────────
-    thread_ts = command.get("thread_ts", "")
 
     org_result = await invite_to_org(github_username)
     if not org_result.ok:
@@ -156,11 +152,10 @@ async def _get_thread_starter(
 async def _warn_missing_github(
     client: AsyncWebClient,
     channel_id: str,
+    thread_ts: str,
     target_user_id: str,
-    command: dict[str, str],
 ) -> None:
     """Post a visible thread reply telling the user to add their GitHub username."""
-    thread_ts = command.get("thread_ts", "")
     text = (
         f"<@{target_user_id}> — please add your GitHub username to your Slack profile!\n"
         "Go to your profile → *Edit profile* → fill in the *GitHub* field.\n"

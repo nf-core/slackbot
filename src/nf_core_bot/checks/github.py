@@ -15,6 +15,11 @@ from nf_core_bot import config
 
 logger = logging.getLogger(__name__)
 
+_GITHUB_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
 
 @dataclass
 class GitHubResult:
@@ -22,6 +27,18 @@ class GitHubResult:
 
     ok: bool
     message: str
+
+
+async def _github_put(path: str, *, json: dict[str, str]) -> httpx.Response:
+    """PUT to the GitHub API using the configured token."""
+    token = config.GITHUB_TOKEN
+    url = f"https://api.github.com{path}"
+    async with httpx.AsyncClient() as http:
+        return await http.put(
+            url,
+            headers={"Authorization": f"Bearer {token}", **_GITHUB_HEADERS},
+            json=json,
+        )
 
 
 async def invite_to_org(username: str) -> GitHubResult:
@@ -32,19 +49,7 @@ async def invite_to_org(username: str) -> GitHubResult:
     This is idempotent — if the user is already a member the API returns 200.
     """
     org = config.GITHUB_ORG
-    token = config.GITHUB_TOKEN
-    url = f"https://api.github.com/orgs/{org}/memberships/{username}"
-
-    async with httpx.AsyncClient() as http:
-        resp = await http.put(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-            json={"role": "member"},
-        )
+    resp = await _github_put(f"/orgs/{org}/memberships/{username}", json={"role": "member"})
 
     if resp.status_code in (200, 201):
         state = resp.json().get("state", "unknown")
@@ -62,19 +67,7 @@ async def add_to_team(username: str, team_slug: str = "contributors") -> GitHubR
     ``PUT /orgs/{org}/teams/{team_slug}/memberships/{username}``
     """
     org = config.GITHUB_ORG
-    token = config.GITHUB_TOKEN
-    url = f"https://api.github.com/orgs/{org}/teams/{team_slug}/memberships/{username}"
-
-    async with httpx.AsyncClient() as http:
-        resp = await http.put(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-            json={"role": "member"},
-        )
+    resp = await _github_put(f"/orgs/{org}/teams/{team_slug}/memberships/{username}", json={"role": "member"})
 
     if resp.status_code in (200, 201):
         state = resp.json().get("state", "unknown")
