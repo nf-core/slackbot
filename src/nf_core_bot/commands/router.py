@@ -23,6 +23,7 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_remove_site,
 )
 from nf_core_bot.commands.hackathon.attendees import handle_attendees
+from nf_core_bot.commands.hackathon.list_cmd import handle_list
 from nf_core_bot.commands.hackathon.register import (
     handle_cancel,
     handle_edit,
@@ -90,7 +91,7 @@ async def dispatch(
 
     # ── Hackathon commands ───────────────────────────────────────────
     if sub == "hackathon":
-        await _route_hackathon(ack, respond, client, user_id, rest)
+        await _route_hackathon(ack, respond, client, user_id, command, rest)
         return
 
     # ── GitHub commands ──────────────────────────────────────────────
@@ -111,6 +112,7 @@ async def _route_hackathon(
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
+    command: dict[str, str],
     tokens: list[str],
 ) -> None:
     """Dispatch ``/nf-core-bot hackathon <sub> [args…]``."""
@@ -121,14 +123,22 @@ async def _route_hackathon(
     sub = tokens[0].lower()
     rest = tokens[1:]
 
+    # Build a body dict that handlers expect for trigger_id / user_id.
+    body: dict[str, str] = {
+        "trigger_id": command.get("trigger_id", ""),
+        "user_id": user_id,
+    }
+
     if sub == "register":
-        await handle_register(ack, respond)
+        await handle_register(ack, respond, client, body)
     elif sub == "edit":
-        await handle_edit(ack, respond)
+        await handle_edit(ack, respond, client, body)
     elif sub == "cancel":
-        await handle_cancel(ack, respond)
+        await handle_cancel(ack, respond, client, body)
+    elif sub == "list":
+        await handle_list(ack, respond, client, body)
     elif sub == "attendees":
-        await handle_attendees(ack, respond, rest)
+        await handle_attendees(ack, respond, client, body, rest)
     elif sub == "admin":
         await _route_admin(ack, respond, rest)
     else:

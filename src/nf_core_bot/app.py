@@ -9,6 +9,7 @@ Usage (local dev)::
 from __future__ import annotations
 
 import logging
+import re
 
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.app.async_app import AsyncApp
@@ -17,6 +18,7 @@ from nf_core_bot import config
 from nf_core_bot.commands.github.add_member_shortcut import handle_add_member_shortcut
 from nf_core_bot.commands.router import dispatch
 from nf_core_bot.db import client as db_client
+from nf_core_bot.forms.handler import handle_registration_step
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +41,18 @@ app = AsyncApp(
 async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-untyped-def]
     """Single entry-point — delegates to the router."""
     await dispatch(ack, respond, client, command)
+
+
+# ── Modal callbacks ──────────────────────────────────────────────────
+
+# Registration form steps use callback_id = "hackathon_reg_step_{n}".
+# We register a regex listener so every step is handled by the same function.
+
+
+@app.view(re.compile(r"^hackathon_reg_step_\d+$"))
+async def on_registration_step(ack, body, client, view):  # type: ignore[no-untyped-def]
+    """Handle every step of the multi-step registration modal."""
+    await handle_registration_step(ack, body, client, view)
 
 
 # ── Message shortcut ────────────────────────────────────────────────

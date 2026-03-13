@@ -15,7 +15,7 @@ Slack <──WebSocket──> ECS Fargate (bot) ──> GitHub API
 
 - AWS CLI configured with the `nf-core` profile (or equivalent credentials for the nf-core AWS account)
 - Docker installed and running
-- The four required secrets stored in SSM Parameter Store (see step 4 below)
+- The four required secrets stored in SSM Parameter Store (see step 6 below)
 
 ### Current deployment
 
@@ -139,9 +139,31 @@ The task role (`nf-core-bot-task-role`) needs:
 
 The execution role needs `ssm:GetParameters` (or `secretsmanager:GetSecretValue`) to inject secrets, plus `logs:CreateLogStream` and `logs:PutLogEvents` for CloudWatch.
 
-DynamoDB permissions are only needed once hackathon features are implemented. For GitHub-only commands, you can omit the DynamoDB policy.
+DynamoDB permissions are required for hackathon registration features. The table must exist before the bot starts (see DynamoDB setup below).
 
-### 5. Store secrets in SSM Parameter Store
+### 5. Create the DynamoDB table
+
+The bot uses a single DynamoDB table with a Global Secondary Index:
+
+```bash
+aws --profile nf-core --region eu-west-1 dynamodb create-table \
+  --table-name nf-core-bot \
+  --attribute-definitions \
+    AttributeName=PK,AttributeType=S \
+    AttributeName=SK,AttributeType=S \
+    AttributeName=GSI1PK,AttributeType=S \
+    AttributeName=GSI1SK,AttributeType=S \
+  --key-schema \
+    AttributeName=PK,KeyType=HASH \
+    AttributeName=SK,KeyType=RANGE \
+  --global-secondary-indexes \
+    '[{"IndexName":"GSI1","KeySchema":[{"AttributeName":"GSI1PK","KeyType":"HASH"},{"AttributeName":"GSI1SK","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]' \
+  --billing-mode PAY_PER_REQUEST
+```
+
+The table stores hackathon metadata, sites, organisers, and registrations. See the README for the full key schema.
+
+### 6. Store secrets in SSM Parameter Store
 
 ```bash
 aws --profile nf-core --region eu-west-1 ssm put-parameter --name /nf-core-bot/SLACK_BOT_TOKEN --type SecureString --value "xoxb-..."

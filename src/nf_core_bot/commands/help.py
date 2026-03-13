@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nf_core_bot.permissions.checks import is_core_team
+from nf_core_bot.db.hackathons import get_active_hackathon
+from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -16,10 +17,11 @@ if TYPE_CHECKING:
 # Each entry: (command string, description, min_role)
 # min_role: "all" | "organiser" | "admin"
 HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
+    ("hackathon list", "List hackathons and your registration status", "all"),
     ("hackathon register", "Register for the active hackathon", "all"),
     ("hackathon edit", "Edit your registration", "all"),
     ("hackathon cancel", "Cancel your registration", "all"),
-    ("hackathon attendees [site]", "List attendees (optionally by site)", "organiser"),
+    ("hackathon attendees [hackathon-id]", "List attendees (optionally by site)", "organiser"),
     ("hackathon admin create <id>", "Create a new hackathon", "admin"),
     ("hackathon admin open <id>", "Open registration", "admin"),
     ("hackathon admin close <id>", "Close registration", "admin"),
@@ -91,10 +93,16 @@ async def handle_hackathon_help(
 
     admin = await is_core_team(client, user_id)
 
-    # For organiser check we'd need a hackathon id; show organiser commands
-    # if the user is an admin (they implicitly have organiser access) or if
-    # they are an organiser on any currently active hackathon.
-    organiser = admin  # TODO: also check is_organiser_any_site once active hackathon lookup exists
+    # Show organiser commands if the user is admin or a site organiser for
+    # the currently active hackathon.
+    organiser = admin
+    if not organiser:
+        try:
+            active = await get_active_hackathon()
+            if active:
+                organiser = await is_organiser_any_site(user_id, active["hackathon_id"])
+        except Exception:
+            pass  # DynamoDB unavailable — hide organiser commands
 
     visible: list[tuple[str, str, str]] = []
     for cmd, desc, role in HACKATHON_COMMANDS:
