@@ -255,7 +255,6 @@ nf-core-bot/
 ├── docker-compose.yml           # Local DynamoDB for development
 ├── pyproject.toml
 ├── docs/
-│   ├── local-development.md     # Running the bot locally
 │   ├── slack-app-setup.md       # Creating the Slack app
 │   ├── commands.md              # Full command reference
 │   └── deployment.md            # AWS ECS Fargate deployment
@@ -311,8 +310,6 @@ nf-core-bot/
 
 ## Development
 
-See [docs/local-development.md](docs/local-development.md) for full setup instructions.
-
 ```bash
 pip install -e ".[dev]"
 cp .env.example .env
@@ -320,7 +317,7 @@ cp .env.example .env
 python -m nf_core_bot
 ```
 
-The bot uses **Socket Mode** — no public URL or tunnel needed for development.
+The bot uses **Socket Mode** — no public URL or tunnel needed.
 DynamoDB is optional (only needed for hackathon features).
 
 See also:

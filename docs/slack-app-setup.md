@@ -79,7 +79,7 @@ After setup you should have three credentials:
 | `SLACK_SIGNING_SECRET` | (hex string) | Basic Information > App Credentials |
 | `SLACK_APP_TOKEN` | `xapp-` | Basic Information > App-Level Tokens |
 
-Put these in your `.env` file as described in [Local Development](local-development.md).
+Put these in your `.env` file (see `.env.example` in the repo root) or in SSM Parameter Store for production (see [Deployment](deployment.md)).
 
 ## GitHub Profile Field
 
