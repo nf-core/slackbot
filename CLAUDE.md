@@ -1,0 +1,90 @@
+# CLAUDE.md
+
+## Project Overview
+
+nf-core-bot is a Slack bot for the nf-core bioinformatics community. The primary feature is hackathon registration management, with future plans for community health tooling.
+
+## Tech Stack
+
+- **Language:** Python 3.12+
+- **Framework:** Slack Bolt for Python
+- **Database:** AWS DynamoDB (single-table design)
+- **Hosting:** AWS ECS Fargate
+- **External APIs:** GitHub REST API (org membership checks)
+- **Infrastructure:** CloudFormation / SAM
+
+## Key Design Decisions
+
+- Single slash command `/nf-core-bot` with subcommand routing (Slack only allows one slash command per app)
+- Registration forms defined in YAML files (`forms/` directory), parsed at runtime into Slack Block Kit modals
+- DynamoDB single-table design with composite keys (see README.md for schema)
+- Two-tier permissions: `@core-team` Slack user group = global admin, site organisers = scoped to their hackathon site
+- All bot responses are ephemeral (only visible to the caller) unless explicitly posting to a channel
+- GitHub checks happen pre-registration: Slack profile → GitHub username field → GitHub API org membership check
+
+## Architecture
+
+```
+Slack ←→ ECS Fargate (Bolt app) ←→ DynamoDB ←→ GitHub API
+```
+
+## Commands to Run
+
+```bash
+# Install dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run the bot locally (needs local DynamoDB + ngrok/tunnel)
+docker compose up -d dynamodb-local
+python -m nf_core_bot.app
+
+# Lint
+ruff check src/ tests/
+ruff format src/ tests/
+
+# Type check
+mypy src/
+```
+
+## Auto-populated from Slack profile for Hackathon registration (not in form YAML)
+
+- `email`, `slack_user_id`, `slack_display_name`, `github_username` — read from Slack profile API at registration time and stored in the registration record automatically
+
+## Project Structure
+
+- `src/nf_core_bot/app.py` — Bolt app entrypoint and slash command registration
+- `src/nf_core_bot/commands/router.py` — Parses subcommands, dispatches to handlers
+- `src/nf_core_bot/commands/hackathon/` — All hackathon-related command handlers
+- `src/nf_core_bot/forms/` — YAML loader, Block Kit builder, modal submission handlers
+- `src/nf_core_bot/checks/` — GitHub API and Slack profile validation
+- `src/nf_core_bot/db/` — DynamoDB client and data access layer
+- `src/nf_core_bot/permissions/` — Permission checks (core-team, organiser)
+- `forms/` — YAML form definitions, one per hackathon
+- `infra/` — CloudFormation templates for AWS deployment
+
+## Coding Conventions
+
+- Use `ruff` for linting and formatting
+- Type hints throughout (enforce with mypy)
+- Async where Bolt supports it (Bolt's async adapter)
+- Keep command handlers thin — business logic in db/ and forms/ modules
+- Tests use moto for DynamoDB mocking and Slack's test fixtures
+
+## DynamoDB Key Patterns
+
+- `PK=HACKATHON#<id> SK=META` — hackathon metadata
+- `PK=HACKATHON#<id> SK=SITE#<site-id>` — site info
+- `PK=HACKATHON#<id> SK=SITE#<site-id>#ORG#<user-id>` — organiser
+- `PK=HACKATHON#<id> SK=REG#<user-id>` — registration
+- GSI1: `GSI1PK=HACKATHON#<id>#SITE#<site-id>` — query registrations by site
+
+## Important Notes
+
+- Slack modals have a 100-element limit per view — split forms across multiple modal steps
+- Slack gives 3 seconds to acknowledge interactions — ack immediately, do async work after
+- The `@core-team` user group membership is cached and refreshed every 5 minutes
+- Form YAML supports `options_from: sites` for dynamic option lists populated from DynamoDB
+- GitHub API calls use a fine-grained PAT with `read:org` scope

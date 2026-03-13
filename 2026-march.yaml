@@ -1,0 +1,197 @@
+# nf-core Hackathon March 2026 — Registration Form
+# Converted from Typeform DceYAz8K
+hackathon: 2026-march
+
+steps:
+  - id: welcome
+    title: "nf-core Hackathon — March 2026"
+    type: statement
+    text: |
+      Please note that the hackathon is not a training event.
+      Beginners are welcome but you'll be expected to just get stuck in!
+
+      By registering you are agreeing to abide by our Code of Conduct:
+      https://nf-co.re/code_of_conduct
+
+  - id: about_you
+    title: "About You"
+    fields:
+      - id: first_name
+        type: text
+        label: "What is your first name(s)?"
+        required: true
+
+      - id: last_name
+        type: text
+        label: "What is your last name(s)?"
+        required: true
+
+      - id: email
+        type: text
+        label: "What is your email address?"
+        required: true
+
+      - id: slack_display_name
+        type: text
+        label: "What is your nf-core Slack display name?"
+        required: false
+        # Note: in Slack bot context, we auto-fill this from the caller's profile
+
+      - id: job_title
+        type: text
+        label: "What is your job/role title?"
+        required: true
+
+      - id: affiliation
+        type: text
+        label: "What is your work/study affiliation?"
+        required: true
+
+      - id: country
+        type: static_select
+        label: "Which country do you currently live?"
+        required: true
+        options_from: countries
+        # Dynamic: populated from a countries list (or hardcoded long list)
+
+  - id: community_demographics
+    title: "Help Us Understand the nf-core Community"
+    fields:
+      - id: age_group
+        type: static_select
+        label: "Which age group do you belong to?"
+        required: true
+        options:
+          - { label: "Under 20", value: under_20 }
+          - { label: "20-30", value: "20_30" }
+          - { label: "31-40", value: "31_40" }
+          - { label: "41-50", value: "41_50" }
+          - { label: "51-60", value: "51_60" }
+          - { label: "61+", value: "61_plus" }
+          - { label: "Prefer not to say", value: prefer_not_to_say }
+
+      - id: gender
+        type: static_select
+        label: "Which gender do you identify as?"
+        required: true
+        options:
+          - { label: "Male", value: male }
+          - { label: "Female", value: female }
+          - { label: "Prefer not to say", value: prefer_not_to_say }
+
+      - id: role
+        type: static_select
+        label: "Which of the following best describes your role?"
+        required: true
+        options:
+          - { label: "Bioinformatician", value: bioinformatician }
+          - { label: "Data Scientist", value: data_scientist }
+          - { label: "Research Software Engineer", value: rse }
+          - { label: "Principal Investigator / Manager", value: pi_manager }
+          - { label: "HPC or System Administrator", value: hpc_sysadmin }
+          - { label: "Prefer not to say", value: prefer_not_to_say }
+
+      - id: organization_type
+        type: static_select
+        label: "Which of the following best describes your organization?"
+        required: true
+        options:
+          - { label: "Academia", value: academia }
+          - { label: "Research Institution", value: research_institution }
+          - { label: "Government agency", value: government }
+          - { label: "Biotech startup", value: biotech }
+          - { label: "Pharma organization", value: pharma }
+          - { label: "Healthcare/Clinical/Diagnostics", value: healthcare }
+          - { label: "Prefer not to say", value: prefer_not_to_say }
+
+  - id: hackathon_experience
+    title: "About the Hackathon"
+    fields:
+      - id: attended_before
+        type: static_select
+        label: "Have you attended an nf-core hackathon before?"
+        required: true
+        options:
+          - { label: "Yes", value: "yes" }
+          - { label: "No", value: "no" }
+
+      - id: contributed_before
+        type: static_select
+        label: "Have you contributed to nf-core before?"
+        required: true
+        options:
+          - { label: "Yes", value: "yes" }
+          - { label: "No", value: "no" }
+
+  - id: attendance_mode
+    title: "How Are You Joining?"
+    fields:
+      - id: attend_local_site
+        type: static_select
+        label: "Will you attend a hackathon local site?"
+        required: true
+        options:
+          - { label: "Yes", value: "yes" }
+          - { label: "No — joining online", value: "no" }
+
+  # ── In-person branch ─────────────────────────────
+
+  - id: local_site_selection
+    title: "Local Site"
+    condition:
+      field: attend_local_site
+      equals: "yes"
+    fields:
+      - id: local_site
+        type: static_select
+        label: "Which local site will you be attending?"
+        required: true
+        options_from: sites
+        # Dynamic: populated from DynamoDB sites for this hackathon
+
+      - id: dietary
+        type: text
+        label: "Do you have any dietary requirements?"
+        required: false
+
+      - id: special_requests
+        type: text
+        label: "Do you have any special requests for your local site organiser?"
+        required: false
+
+  # ── Online branch ────────────────────────────────
+
+  - id: online_details
+    title: "Online Attendance"
+    condition:
+      field: attend_local_site
+      equals: "no"
+    fields:
+      - id: timezone
+        type: static_select
+        label: "Which time zones best align with when you'll be online?"
+        required: true
+        options:
+          - { label: "APAC (Asia, Pacific)", value: apac }
+          - { label: "EMEA (Africa, Europe and Middle East)", value: emea }
+          - { label: "AMER (Americas)", value: amer }
+
+  # ── Common final step ────────────────────────────
+
+  - id: additional
+    title: "Anything Else"
+    fields:
+      - id: comments
+        type: text
+        label: "Do you have any additional comments?"
+        required: false
+        multiline: true
+
+      - id: code_of_conduct
+        type: checkboxes
+        label: "Code of Conduct"
+        required: true
+        options:
+          - label: "I have read and agree to the nf-core Code of Conduct"
+            value: accepted
+            description: "https://nf-co.re/code_of_conduct"
