@@ -57,7 +57,8 @@ class TestBareUsername:
         final_text = client.chat_postMessage.call_args.kwargs.get(
             "text", client.chat_postMessage.call_args[1].get("text", "")
         )
-        assert "Invited" in final_text
+        assert "invite" in final_text.lower()
+        assert "nf-core/invitation" in final_text
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     async def test_invalid_username_rejected(self, _perm: AsyncMock) -> None:
@@ -132,12 +133,12 @@ class TestSlackMention:
         assert "GitHub username" in text
 
 
-# ── Thread-starter resolution ────────────────────────────────────────
+# ── No-argument usage ────────────────────────────────────────────────
 
 
-class TestThreadStarter:
+class TestNoArgs:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    async def test_no_args_no_thread_shows_usage(self, _perm: AsyncMock) -> None:
+    async def test_no_args_shows_usage(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
         client = AsyncMock()
@@ -146,41 +147,6 @@ class TestThreadStarter:
 
         respond_calls = respond.call_args_list
         assert any("Usage:" in str(c) for c in respond_calls)
-
-    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member.add_to_team")
-    async def test_thread_resolves_starter(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_ghuser: AsyncMock, _perm: AsyncMock
-    ) -> None:
-        mock_org.return_value = GitHubResult(ok=True, message="ok")
-        mock_team.return_value = GitHubResult(ok=True, message="ok")
-
-        ack = AsyncMock()
-        respond = AsyncMock()
-        client = AsyncMock()
-        # Mock conversations_history to return a thread starter
-        client.conversations_history.return_value = {"messages": [{"user": "U_STARTER", "ts": "111"}]}
-
-        await handle_add_member(ack, respond, client, "U_ADMIN", _command(thread_ts="111"), [])
-
-        mock_ghuser.assert_awaited_once_with(client, "U_STARTER")
-
-    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    async def test_thread_starter_not_found(self, _perm: AsyncMock) -> None:
-        ack = AsyncMock()
-        respond = AsyncMock()
-        client = AsyncMock()
-        client.conversations_history.return_value = {"messages": []}
-
-        await handle_add_member(ack, respond, client, "U_ADMIN", _command(thread_ts="111"), [])
-
-        client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "Could not determine" in text
 
 
 # ── GitHub API error handling ────────────────────────────────────────

@@ -14,6 +14,7 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.app.async_app import AsyncApp
 
 from nf_core_bot import config
+from nf_core_bot.commands.github.add_member_shortcut import handle_add_member_shortcut
 from nf_core_bot.commands.router import dispatch
 from nf_core_bot.db import client as db_client
 
@@ -40,6 +41,15 @@ async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-
     await dispatch(ack, respond, client, command)
 
 
+# ── Message shortcut ────────────────────────────────────────────────
+
+
+@app.shortcut("add_to_github_org")
+async def shortcut_add_to_github_org(ack, shortcut, client):  # type: ignore[no-untyped-def]
+    """Message shortcut — right-click a message → Add to GitHub org."""
+    await handle_add_member_shortcut(ack, shortcut, client)
+
+
 # ── Startup ──────────────────────────────────────────────────────────
 
 
@@ -47,11 +57,17 @@ async def _start() -> None:
     """Initialise DB and start the Socket-Mode handler."""
     assert config.DYNAMODB_TABLE is not None  # has default
     assert config.AWS_REGION is not None  # has default
-    db_client.init(
-        table_name=config.DYNAMODB_TABLE,
-        endpoint_url=config.DYNAMODB_ENDPOINT,
-        region=config.AWS_REGION,
-    )
+    try:
+        db_client.init(
+            table_name=config.DYNAMODB_TABLE,
+            endpoint_url=config.DYNAMODB_ENDPOINT,
+            region=config.AWS_REGION,
+        )
+    except Exception:
+        logger.warning(
+            "DynamoDB unavailable — hackathon commands will not work, but GitHub commands are fully functional.",
+            exc_info=True,
+        )
     logger.info("nf-core-bot starting (Socket Mode) …")
 
     handler = AsyncSocketModeHandler(app, config.SLACK_APP_TOKEN)

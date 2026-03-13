@@ -2,8 +2,8 @@
 
 A Slack bot for the nf-core community, starting with hackathon registration management.
 
-> [!INFO]
-> This is a work-in-process repository. Nothing functional yet.
+> [!WARNING]
+> This is a work-in-progress repository. The GitHub org management commands are functional. Hackathon registration is scaffolded but not yet implemented.
 
 Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on AWS (ECS Fargate + DynamoDB).
 
@@ -43,12 +43,11 @@ Slack ←→ ECS Fargate (Bolt app, Python)
 
 ### AWS Services
 
-- **ECS Fargate** — single task, always-on container running the Bolt app in HTTP mode
+- **ECS Fargate** — single task, always-on container running the Bolt app in Socket Mode
 - **DynamoDB** — single table, on-demand capacity (free tier is plenty)
 - **ECR** — container registry for the bot image
-- **ALB** — application load balancer for Slack's HTTP requests
+- **SSM Parameter Store** — secrets (Slack tokens, GitHub PAT)
 - **EventBridge** — scheduled triggers for nightly reports (future)
-- **S3** — optional, for form YAML hot-reloading without redeploy
 - **CloudWatch** — logs and basic monitoring
 
 ### DynamoDB Single-Table Design
@@ -106,14 +105,15 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 
 # GitHub commands (@core-team only)
 /nf-core-bot github help
-/nf-core-bot github add-member                  # In a thread — invites the thread starter
 /nf-core-bot github add-member @slack-user       # Invite a specific Slack user
 /nf-core-bot github add-member <github-username> # Invite by GitHub username directly
+# Message shortcut: right-click a message → More actions → "Add to GitHub org"
 ```
 
 **Notes:**
 
 - Slack allows only one slash command per app — `/nf-core-bot` is the entry point, everything else is parsed as subcommands
+- Slack does not allow custom slash commands in threads — use the "Add to GitHub org" message shortcut instead
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
 - All responses to commands are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
 - Exception: `github add-member` posts **visible thread replies** so the original requester can see the outcome
@@ -252,17 +252,19 @@ nf-core-bot/
 ├── README.md
 ├── CLAUDE.md                    # Instructions for Claude Code sessions
 ├── Dockerfile
-├── docker-compose.yml           # Local development
+├── docker-compose.yml           # Local DynamoDB for development
 ├── pyproject.toml
+├── docs/
+│   ├── local-development.md     # Running the bot locally
+│   ├── slack-app-setup.md       # Creating the Slack app
+│   ├── commands.md              # Full command reference
+│   └── deployment.md            # AWS ECS Fargate deployment
 ├── forms/
 │   └── 2026-march.yaml          # Form definitions (one per hackathon)
-├── infra/
-│   ├── template.yaml            # CloudFormation / SAM template
-│   └── taskdef.json             # ECS task definition
 ├── src/
 │   └── nf_core_bot/
 │       ├── __init__.py
-│       ├── app.py               # Bolt app setup, slash command router
+│       ├── app.py               # Bolt app setup, slash command + shortcut registration
 │       ├── config.py            # Environment variables, constants
 │       ├── commands/
 │       │   ├── __init__.py
@@ -270,93 +272,59 @@ nf-core-bot/
 │       │   ├── help.py
 │       │   ├── hackathon/
 │       │   │   ├── __init__.py
-│       │   │   ├── register.py  # register, edit, cancel
-│       │   │   ├── attendees.py
-│       │   │   └── admin.py     # create, open, close, archive, sites, organisers
+│       │   │   ├── register.py  # register, edit, cancel (scaffolded)
+│       │   │   ├── attendees.py # (scaffolded)
+│       │   │   └── admin.py     # create, open, close, archive, sites, organisers (scaffolded)
 │       │   ├── github/
 │       │   │   ├── __init__.py
-│       │   │   └── add_member.py # invite user to nf-core org + contributors team
+│       │   │   ├── add_member.py          # slash command: invite user to nf-core org
+│       │   │   └── add_member_shortcut.py # message shortcut: invite message author
 │       │   └── community/       # Future: audit commands
 │       │       └── __init__.py
 │       ├── forms/
 │       │   ├── __init__.py
-│       │   ├── loader.py        # Load YAML, resolve dynamic options
-│       │   ├── builder.py       # YAML → Slack Block Kit modal views
-│       │   └── handler.py       # Modal submission / view_push callbacks
+│       │   ├── loader.py        # Load YAML, resolve dynamic options (scaffolded)
+│       │   ├── builder.py       # YAML → Slack Block Kit modal views (scaffolded)
+│       │   └── handler.py       # Modal submission / view_push callbacks (scaffolded)
 │       ├── checks/
 │       │   ├── __init__.py
-│       │   ├── github.py        # GitHub API: org membership check
+│       │   ├── github.py        # GitHub API: org membership, invitations, team management
 │       │   └── slack_profile.py # Read custom profile field for GitHub username
 │       ├── db/
 │       │   ├── __init__.py
 │       │   ├── client.py        # DynamoDB client, table setup
-│       │   ├── hackathons.py    # CRUD for hackathon lifecycle
-│       │   ├── registrations.py # CRUD for registrations
-│       │   └── sites.py         # CRUD for sites + organisers
+│       │   ├── hackathons.py    # CRUD for hackathon lifecycle (scaffolded)
+│       │   ├── registrations.py # CRUD for registrations (scaffolded)
+│       │   └── sites.py         # CRUD for sites + organisers (scaffolded)
 │       └── permissions/
 │           ├── __init__.py
 │           └── checks.py        # @core-team check, organiser check
 └── tests/
     ├── conftest.py
+    ├── test_add_member.py
+    ├── test_add_member_shortcut.py
+    ├── test_github_checks.py
+    ├── test_permissions.py
     ├── test_router.py
-    ├── test_forms.py
-    ├── test_registrations.py
-    └── test_permissions.py
+    └── test_slack_profile.py
 ```
 
 ## Development
 
-### Prerequisites
-
-- Python 3.12+
-- Docker (for local DynamoDB)
-- A Slack app configured with:
-  - Slash command: `/nf-core-bot`
-  - Bot token scopes: `commands`, `chat:write`, `users:read`, `users.profile:read`, `usergroups:read`, `channels:manage`, `groups:write`, `channels:history`, `groups:history`
-  - Interactivity enabled (for modals)
-  - Request URL pointed at your dev tunnel (ngrok or similar)
-
-### Local Setup
+See [docs/local-development.md](docs/local-development.md) for full setup instructions.
 
 ```bash
-# Clone and install
-git clone <repo-url>
-cd nf-core-bot
 pip install -e ".[dev]"
-
-# Start local DynamoDB
-docker compose up -d dynamodb-local
-
-# Set environment variables
 cp .env.example .env
 # Edit .env with your Slack app tokens and GitHub token
-
-# Run the bot
-python -m nf_core_bot.app
+python -m nf_core_bot
 ```
 
-### Environment Variables
+The bot uses **Socket Mode** — no public URL or tunnel needed for development.
+DynamoDB is optional (only needed for hackathon features).
 
-```sh
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_SIGNING_SECRET=...
-SLACK_APP_TOKEN=xapp-...  # Only if using socket mode for dev
-GITHUB_TOKEN=ghp_...      # For org membership checks + invitations (admin:org)
-DYNAMODB_TABLE=nf-core-bot
-DYNAMODB_ENDPOINT=http://localhost:8000  # For local dev only
-CORE_TEAM_USERGROUP_HANDLE=core-team
-GITHUB_ORG=nf-core
-AWS_REGION=eu-north-1
-```
+See also:
 
-## Deployment
-
-Build and push to ECR, deploy via ECS. CloudFormation template in `infra/` provisions:
-
-- ECS cluster + Fargate service
-- DynamoDB table with GSI
-- ALB + target group
-- IAM roles
-- CloudWatch log group
-
-The Slack app's request URL should point at the ALB endpoint.
+- [Slack App Setup](docs/slack-app-setup.md) — creating and configuring the Slack app
+- [Command Reference](docs/commands.md) — all available commands
+- [Deployment](docs/deployment.md) — deploying to AWS ECS Fargate

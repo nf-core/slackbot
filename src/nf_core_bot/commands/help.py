@@ -33,7 +33,6 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
 ]
 
 GITHUB_COMMANDS: list[tuple[str, str, str]] = [
-    ("github add-member", "Invite thread starter to nf-core GitHub org (use in a thread)", "admin"),
     ("github add-member @user", "Invite a Slack user to nf-core GitHub org", "admin"),
     ("github add-member <username>", "Invite a GitHub user to nf-core GitHub org", "admin"),
 ]
@@ -131,5 +130,9 @@ async def handle_github_help(
 
     sections = ["*GitHub commands* (`@core-team` only)\n"]
     sections.append(_format_commands(GITHUB_COMMANDS))
+    sections.append(
+        "\nYou can also right-click any message and use *More actions → Add to GitHub org* "
+        "to invite the message author."
+    )
 
     await respond("\n".join(sections), response_type="ephemeral")

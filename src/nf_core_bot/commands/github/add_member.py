@@ -1,20 +1,20 @@
 """``/nf-core-bot github add-member`` — invite a user to the nf-core GitHub org.
 
-Usage (in a thread, no argument):
-    Resolves the thread-starter's GitHub username from their Slack profile.
-
 Usage (explicit Slack mention):
     ``/nf-core-bot github add-member @slack-user``
 
 Usage (explicit GitHub username):
     ``/nf-core-bot github add-member octocat``
+
+To invite the author of a specific message, use the "Add to GitHub org"
+message shortcut (right-click a message → More actions) instead.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from nf_core_bot.checks.github import add_to_team, invite_to_org
 from nf_core_bot.checks.slack_profile import get_github_username, normalise_github_username
@@ -77,30 +77,14 @@ async def handle_add_member(
                 )
                 return
     else:
-        # No argument — must be in a thread; resolve from thread starter
-        if not thread_ts:
-            await respond(
-                "Usage: `/nf-core-bot github add-member [@user | github-username]`\n"
-                "Or use this command in a thread (without arguments) to invite the thread starter.",
-                response_type="ephemeral",
-            )
-            return
-
-        target_user_id = await _get_thread_starter(client, channel_id, thread_ts)
-        if target_user_id is None:
-            await _thread_reply(
-                client,
-                channel_id,
-                thread_ts,
-                "Could not determine the thread starter. Please specify a user explicitly: "
-                "`/nf-core-bot github add-member @user`",
-            )
-            return
-
-        github_username = await get_github_username(client, target_user_id)
-        if github_username is None:
-            await _warn_missing_github(client, channel_id, thread_ts, target_user_id)
-            return
+        # No argument provided
+        await respond(
+            "Usage: `/nf-core-bot github add-member [@user | github-username]`\n\n"
+            "You can also right-click a message and use *More actions → Add to GitHub org* "
+            "to invite the message author.",
+            response_type="ephemeral",
+        )
+        return
 
     # ── 3. Invite to org + add to contributors team ──────────────────
 
@@ -152,33 +136,12 @@ async def handle_add_member(
         client,
         channel_id,
         thread_ts,
-        f"Invited `{github_username}` to the nf-core GitHub org and added to the *contributors* team.",
+        f"Sent `{github_username}` an invite to the nf-core GitHub organisation and *contributors* team.\n"
+        "They can accept at: https://github.com/orgs/nf-core/invitation",
     )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
-
-
-async def _get_thread_starter(
-    client: AsyncWebClient,
-    channel_id: str,
-    thread_ts: str,
-) -> str | None:
-    """Return the user ID of the thread's parent message author."""
-    try:
-        resp = await client.conversations_history(
-            channel=channel_id,
-            latest=thread_ts,
-            inclusive=True,
-            limit=1,
-        )
-        messages: list[dict[str, Any]] = resp.get("messages", [])
-        if messages:
-            user: str | None = messages[0].get("user")
-            return user
-    except Exception:
-        logger.exception("Failed to read thread parent in channel=%s ts=%s", channel_id, thread_ts)
-    return None
 
 
 async def _warn_missing_github(
