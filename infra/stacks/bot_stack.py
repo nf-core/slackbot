@@ -26,7 +26,7 @@ class NfCoreBotStack(Stack):
         Tags.of(self).add("Project", "nf-core-bot")
 
         # ----------------------------------------------------------------------
-        # VPC — public subnets only, no NAT gateway needed.
+        # VPC - public subnets only, no NAT gateway needed.
         # The bot uses Slack Socket Mode (outbound WebSocket), so it only
         # needs outbound internet access via an Internet Gateway.
         # ----------------------------------------------------------------------
@@ -45,7 +45,7 @@ class NfCoreBotStack(Stack):
         )
 
         # ----------------------------------------------------------------------
-        # DynamoDB — single-table design for hackathons, sites, registrations.
+        # DynamoDB - single-table design for hackathons, sites, registrations.
         # See README.md for the full key schema.
         # ----------------------------------------------------------------------
         table = dynamodb.Table(
@@ -58,7 +58,7 @@ class NfCoreBotStack(Stack):
             removal_policy=RemovalPolicy.RETAIN,
         )
 
-        # GSI1 — used to query registrations by site
+        # GSI1 - used to query registrations by site
         table.add_global_secondary_index(
             index_name="GSI1",
             partition_key=dynamodb.Attribute(name="GSI1PK", type=dynamodb.AttributeType.STRING),
@@ -77,7 +77,7 @@ class NfCoreBotStack(Stack):
         )
 
         # ----------------------------------------------------------------------
-        # Task Definition — 0.25 vCPU / 512 MB, Fargate
+        # Task Definition - 0.25 vCPU / 512 MB, Fargate
         # ----------------------------------------------------------------------
         task_definition = ecs.FargateTaskDefinition(
             self,
@@ -135,14 +135,14 @@ class NfCoreBotStack(Stack):
         table.grant_read_write_data(task_definition.task_role)
 
         # ----------------------------------------------------------------------
-        # Fargate Service — single task, public IP for outbound internet.
+        # Fargate Service - single task, public IP for outbound internet.
         # No inbound traffic needed (Socket Mode is outbound-only).
         # ----------------------------------------------------------------------
         security_group = ec2.SecurityGroup(
             self,
             "ServiceSG",
             vpc=vpc,
-            description="nf-core-bot Fargate service — outbound only",
+            description="nf-core-bot Fargate service - outbound only",
             allow_all_outbound=True,
         )
 
