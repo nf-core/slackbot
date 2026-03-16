@@ -23,12 +23,12 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("hackathon cancel", "Cancel your registration", "all"),
     ("hackathon attendees [hackathon-id]", "List attendees (optionally by site)", "organiser"),
     ("hackathon admin list", "List all hackathons", "admin"),
-    ("hackathon admin preview <hackathon-id>", "Preview the registration form", "admin"),
-    ("hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>", "Add a local site", "admin"),
-    ("hackathon admin remove-site <hackathon-id> <site-id>", "Remove a local site", "admin"),
-    ("hackathon admin list-sites <hackathon-id>", "List sites for a hackathon", "admin"),
-    ("hackathon admin add-organiser <hackathon-id> <site-id> @user", "Add a site organiser", "admin"),
-    ("hackathon admin remove-organiser <hackathon-id> <site-id> @user", "Remove a site organiser", "admin"),
+    ("hackathon admin preview [hackathon-id]", "Preview the registration form", "admin"),
+    ("hackathon admin add-site [hackathon-id] <site-id> <name> | <city> | <country>", "Add a local site", "admin"),
+    ("hackathon admin remove-site [hackathon-id] <site-id>", "Remove a local site", "admin"),
+    ("hackathon admin list-sites [hackathon-id]", "List sites for a hackathon", "admin"),
+    ("hackathon admin add-organiser [hackathon-id] <site-id> @user", "Add a site organiser", "admin"),
+    ("hackathon admin remove-organiser [hackathon-id] <site-id> @user", "Remove a site organiser", "admin"),
 ]
 
 GITHUB_COMMANDS: list[tuple[str, str, str]] = [
