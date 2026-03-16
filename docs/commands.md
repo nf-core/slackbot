@@ -1,6 +1,9 @@
 # Command Reference
 
-All commands use the `/nf-core` slash command with subcommand routing. Slack only allows one slash command per app, so everything is parsed as subcommands.
+Two slash commands:
+
+- `/nf-core` — general help, GitHub commands, future community tooling
+- `/hackathon` — all hackathon registration and admin commands
 
 All responses are **ephemeral** (only visible to the caller) unless noted otherwise.
 
@@ -12,84 +15,94 @@ All responses are **ephemeral** (only visible to the caller) unless noted otherw
 /nf-core help
 ```
 
-Show available commands, filtered by your permissions. Admin commands are only shown to `@core-team` members.
+Show available `/nf-core` commands, filtered by your permissions. Admin commands are only shown to `@core-team` members.
 
 ---
 
 ## Hackathon Commands
 
-### `hackathon help`
+### `help`
 
 ```
-/nf-core hackathon help
+/hackathon help
 ```
 
 Show hackathon-specific commands available to you.
 
-### `hackathon list`
+### `list`
 
 ```
-/nf-core hackathon list
+/hackathon list
 ```
 
 List all non-archived hackathons with their status, dates, and event URL. If you have an active registration for any listed hackathon, your registration status is shown.
 
 **Permissions:** All users.
 
-### `hackathon register`
+### `register`
 
 ```
-/nf-core hackathon register
+/hackathon register
 ```
 
 Register for the currently open hackathon. Opens a multi-step modal form.
 
 The bot will:
 1. Find the active (open) hackathon — errors if none or multiple are open
-2. Check if you're already registered — directs you to `hackathon edit` if so
+2. Check if you're already registered — directs you to `/hackathon edit` if so
 3. Load the form YAML and open a multi-step modal
-4. Auto-fill email, Slack display name, and GitHub username from your Slack profile
+4. Pre-fill your name from your Slack profile (editable), and show email + GitHub username as read-only context
 5. On submit: save registration to DynamoDB and join you to the hackathon Slack channel
 
 **Permissions:** All users.
 
-### `hackathon edit`
+### `edit`
 
 ```
-/nf-core hackathon edit
+/hackathon edit
 ```
 
 Edit your existing registration. Re-opens the modal form pre-filled with your current answers.
 
 **Permissions:** All users (must have an active registration).
 
-### `hackathon cancel`
+### `cancel`
 
 ```
-/nf-core hackathon cancel
+/hackathon cancel
 ```
 
 Cancel your registration for the active hackathon. Sets your registration status to `cancelled`.
 
 **Permissions:** All users (must have an active registration).
 
-### `hackathon attendees`
+### `sites`
 
 ```
-/nf-core hackathon attendees [hackathon-id]
+/hackathon sites [hackathon-id]
 ```
 
-List registered attendees. If `hackathon-id` is omitted, defaults to the active hackathon.
+List sites for a hackathon with their names, locations, organiser @mentions, registration count per site, and total registrations. If `hackathon-id` is omitted, defaults to the active hackathon.
+
+**Permissions:** All users.
+
+### `export`
+
+```
+/hackathon export [hackathon-id]
+```
+
+Export all registrations as a CSV file, uploaded to a DM with you. Includes profile data (email, GitHub username) and all form answers.
 
 **Permissions:**
-- **Site organisers** — see attendees for their site(s) only
-- **`@core-team`** — see all attendees across all sites
+- **Site organisers** — can export (scoped to all registrations)
+- **`@core-team`** — can export all registrations
 
 **Examples:**
 
 ```
-/nf-core hackathon attendees
-/nf-core hackathon attendees 2026-march
+/hackathon export
+/hackathon export 2026-march
 ```
 
 ---
@@ -100,97 +113,43 @@ All admin commands require `@core-team` Slack user group membership.
 
 > **Note:** Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/`, not via slash commands. See [Managing Hackathon Lifecycle](#managing-hackathon-lifecycle) below.
 
-### `hackathon admin list`
+### `admin list`
 
 ```
-/nf-core hackathon admin list
+/hackathon admin list
 ```
 
 List all hackathons including draft and archived ones, with their current status, dates, and event URL. This shows hackathons from all YAML files in `forms/`.
 
-### `hackathon admin preview`
+### `admin preview`
 
 ```
-/nf-core hackathon admin preview <hackathon-id>
+/hackathon admin preview [hackathon-id]
 ```
 
-Open the registration form for a hackathon in preview mode. The modal opens and can be stepped through, but no data is saved to DynamoDB. Useful for testing form YAML changes before opening registration.
+Open the registration form for a hackathon in preview mode. The modal opens and can be stepped through, but no data is saved to DynamoDB. Useful for testing form YAML changes before opening registration. If `hackathon-id` is omitted, defaults to the active hackathon.
 
 **Example:**
 
 ```
-/nf-core hackathon admin preview 2026-march
+/hackathon admin preview 2026-march
 ```
 
-### `hackathon admin add-site`
+### `admin add-site`
 
 ```
-/nf-core hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
+/hackathon admin add-site [hackathon-id]
 ```
 
-Add a local site to a hackathon. The description uses pipe-separated fields for name, city, and country.
+Opens a modal form to add a new site to a hackathon. The form includes a hackathon dropdown, site ID, name, city, country (type-ahead search), and multi-user select for organisers.
 
-**Example:**
-
-```
-/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain
-```
-
-### `hackathon admin remove-site`
+### `admin edit-site`
 
 ```
-/nf-core hackathon admin remove-site <hackathon-id> <site-id>
+/hackathon admin edit-site [hackathon-id] [site-id]
 ```
 
-Remove a site from a hackathon.
-
-**Example:**
-
-```
-/nf-core hackathon admin remove-site 2026-march barcelona
-```
-
-### `hackathon admin list-sites`
-
-```
-/nf-core hackathon admin list-sites <hackathon-id>
-```
-
-List all sites for a hackathon with their organisers.
-
-**Example:**
-
-```
-/nf-core hackathon admin list-sites 2026-march
-```
-
-### `hackathon admin add-organiser`
-
-```
-/nf-core hackathon admin add-organiser <hackathon-id> <site-id> @user
-```
-
-Add a site organiser. Organisers can view attendee lists scoped to their site(s).
-
-**Example:**
-
-```
-/nf-core hackathon admin add-organiser 2026-march barcelona @jose
-```
-
-### `hackathon admin remove-organiser`
-
-```
-/nf-core hackathon admin remove-organiser <hackathon-id> <site-id> @user
-```
-
-Remove a site organiser.
-
-**Example:**
-
-```
-/nf-core hackathon admin remove-organiser 2026-march barcelona @jose
-```
+Opens a two-step flow: first a picker modal to select the hackathon and site, then the edit form pre-filled with the site's current details. Includes a delete button to remove the site.
 
 ---
 
@@ -227,22 +186,21 @@ The `channel` field accepts either a Slack channel URL (`https://nfcore.slack.co
 
 1. **Create the YAML file** — copy an existing form in `forms/` or start fresh using the JSON schema for guidance. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new hackathon.
-3. **Preview the form** — `/nf-core hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
-4. **Add sites** — `/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
-5. **Add organisers** — `/nf-core hackathon admin add-organiser 2026-march barcelona @jose`
-6. **Open registrations** — change `status: open` in the YAML, commit, push.
-7. **Monitor** — `/nf-core hackathon attendees`
-8. **Close registrations** — change `status: closed` in the YAML, commit, push.
-9. **Archive** — change `status: archived` to hide from user-facing `hackathon list`.
+3. **Preview the form** — `/hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
+4. **Add sites** — `/hackathon admin add-site` (opens a form to add sites with organisers).
+5. **Open registrations** — change `status: open` in the YAML, commit, push.
+6. **Monitor** — `/hackathon sites` to see registration counts per site. `/hackathon export` for full CSV.
+7. **Close registrations** — change `status: closed` in the YAML, commit, push.
+8. **Archive** — change `status: archived` to hide from user-facing `/hackathon list`.
 
 ### Status values
 
 | Status | Effect |
 |--------|--------|
 | `draft` | Visible only via `admin list` and `admin preview`. Users cannot register. |
-| `open` | Users can register. Shown in `hackathon list`. Only one hackathon should be open at a time. |
-| `closed` | Registrations are closed. Still visible in `hackathon list`. |
-| `archived` | Hidden from `hackathon list`. Only visible via `admin list`. |
+| `open` | Users can register. Shown in `/hackathon list`. Only one hackathon should be open at a time. |
+| `closed` | Registrations are closed. Still visible in `/hackathon list`. |
+| `archived` | Hidden from `/hackathon list`. Only visible via `admin list`. |
 
 ---
 
@@ -312,8 +270,8 @@ This works in threads (unlike slash commands, which Slack does not support in th
 
 | Level | Who | Access |
 |-------|-----|--------|
-| **User** | Everyone | `help`, `hackathon list`, `hackathon register/edit/cancel` |
-| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `hackathon attendees` (scoped to their sites) |
-| **Admin** | `@core-team` Slack user group members | All commands including `hackathon admin *`, `github *`, full `hackathon attendees` |
+| **User** | Everyone | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites` |
+| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export` |
+| **Admin** | `@core-team` Slack user group members | All commands including `/hackathon admin *`, `/nf-core github *` |
 
 Admin membership is checked via `usergroups.users.list` and cached for 5 minutes.

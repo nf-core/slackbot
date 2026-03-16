@@ -10,10 +10,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 import nf_core_bot.commands.router as router_mod
-from nf_core_bot.commands.router import dispatch
+from nf_core_bot.commands.router import dispatch, dispatch_hackathon
 
 
 def _command(text: str = "", command: str = "/nf-core") -> dict[str, str]:
@@ -36,7 +34,7 @@ class TestAdminDispatchTypes:
         """admin list handler receives (ack, respond) only."""
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin list"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("admin list", command="/hackathon"))
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 2  # ack, respond
@@ -45,7 +43,9 @@ class TestAdminDispatchTypes:
         """admin preview handler receives (ack, respond, client, body, args) where args is a list."""
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "preview", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin preview 2026-march"))
+        await dispatch_hackathon(
+            AsyncMock(), AsyncMock(), AsyncMock(), _command("admin preview 2026-march", command="/hackathon")
+        )
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 5  # ack, respond, client, body, args_list
@@ -56,11 +56,11 @@ class TestAdminDispatchTypes:
     async def test_admin_add_site_receives_ack_respond_client_body_args(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "add-site", mock)
-        await dispatch(
+        await dispatch_hackathon(
             AsyncMock(),
             AsyncMock(),
             AsyncMock(),
-            _command("hackathon admin add-site 2026-march"),
+            _command("admin add-site 2026-march", command="/hackathon"),
         )
         mock.assert_awaited_once()
         args = mock.call_args[0]
@@ -70,11 +70,11 @@ class TestAdminDispatchTypes:
     async def test_admin_edit_site_receives_ack_respond_client_body_args(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "edit-site", mock)
-        await dispatch(
+        await dispatch_hackathon(
             AsyncMock(),
             AsyncMock(),
             AsyncMock(),
-            _command("hackathon admin edit-site 2026-march barcelona"),
+            _command("admin edit-site 2026-march barcelona", command="/hackathon"),
         )
         mock.assert_awaited_once()
         args = mock.call_args[0]
@@ -91,21 +91,25 @@ class TestAdminDispatchArgValues:
     async def test_preview_with_no_args(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "preview", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin preview"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("admin preview", command="/hackathon"))
         args = mock.call_args[0]
         assert args[4] == []  # empty list when no hackathon-id provided
 
     async def test_preview_with_hackathon_id(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "preview", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin preview 2026-march"))
+        await dispatch_hackathon(
+            AsyncMock(), AsyncMock(), AsyncMock(), _command("admin preview 2026-march", command="/hackathon")
+        )
         args = mock.call_args[0]
         assert args[4] == ["2026-march"]
 
     async def test_add_site_body_contains_trigger_id(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "add-site", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin add-site"))
+        await dispatch_hackathon(
+            AsyncMock(), AsyncMock(), AsyncMock(), _command("admin add-site", command="/hackathon")
+        )
         body = mock.call_args[0][3]
         assert "trigger_id" in body
         assert "user_id" in body
@@ -113,7 +117,9 @@ class TestAdminDispatchArgValues:
     async def test_body_contains_trigger_id_and_user_id(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "preview", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin preview test"))
+        await dispatch_hackathon(
+            AsyncMock(), AsyncMock(), AsyncMock(), _command("admin preview test", command="/hackathon")
+        )
         body = mock.call_args[0][3]
         assert "trigger_id" in body
         assert "user_id" in body
@@ -130,7 +136,7 @@ class TestHackathonDispatchTypes:
     async def test_register_receives_ack_respond_client_body(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_register", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon register"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("register", command="/hackathon"))
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 4  # ack, respond, client, body
@@ -139,28 +145,28 @@ class TestHackathonDispatchTypes:
     async def test_edit_receives_ack_respond_client_body(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_edit", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon edit"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("edit", command="/hackathon"))
         mock.assert_awaited_once()
         assert len(mock.call_args[0]) == 4
 
     async def test_cancel_receives_ack_respond_client_body(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_cancel", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon cancel"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("cancel", command="/hackathon"))
         mock.assert_awaited_once()
         assert len(mock.call_args[0]) == 4
 
     async def test_list_receives_ack_respond_client_body(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_list", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon list"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("list", command="/hackathon"))
         mock.assert_awaited_once()
         assert len(mock.call_args[0]) == 4
 
     async def test_export_receives_ack_respond_client_body_rest(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_export", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon export h1"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("export h1", command="/hackathon"))
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 5  # ack, respond, client, body, rest
@@ -197,96 +203,77 @@ class TestUnknownCommandsAck:
     async def test_unknown_hackathon_sub_acks(self):
         ack = AsyncMock()
         respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("hackathon unknown"))
+        await dispatch_hackathon(ack, respond, AsyncMock(), _command("unknown", command="/hackathon"))
         ack.assert_awaited_once()
 
     async def test_unknown_admin_sub_acks(self):
         ack = AsyncMock()
         respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("hackathon admin unknown"))
+        await dispatch_hackathon(ack, respond, AsyncMock(), _command("admin unknown", command="/hackathon"))
         ack.assert_awaited_once()
 
 
-class TestHackathonAliases:
-    """Verify that 'h', 'hack', and 'hackathons' route like 'hackathon'."""
+# ── Admin alias — adm / a ──────────────────────────────────────────
 
-    @pytest.mark.parametrize("alias", ["h", "hack", "hackathons"])
-    async def test_alias_routes_to_hackathon(self, alias: str, monkeypatch):
-        """Each alias should dispatch the same as 'hackathon'."""
-        mock = AsyncMock()
-        monkeypatch.setattr(router_mod, "_route_hackathon", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} list"))
-        mock.assert_awaited_once()
 
-    @pytest.mark.parametrize("alias", ["h", "hack", "hackathons"])
-    async def test_alias_admin_dispatches(self, alias: str, monkeypatch):
+class TestAdminAliases:
+    """Verify that 'a' and 'adm' route to admin."""
+
+    async def test_adm_alias(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} admin list"))
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("adm list", command="/hackathon"))
         mock.assert_awaited_once()
 
-
-# ── /hackathon command name threading ───────────────────────────────
-
-
-class TestCommandNameThreading:
-    """Verify that the command name (/nf-core vs /hackathon) is threaded
-    through to help handlers and error messages."""
-
-    async def test_hackathon_help_receives_command_name(self, monkeypatch):
-        """handle_hackathon_help gets command_name='/hackathon' when invoked via /hackathon."""
+    async def test_a_alias(self, monkeypatch):
         mock = AsyncMock()
-        monkeypatch.setattr("nf_core_bot.commands.router.handle_hackathon_help", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon help", command="/hackathon"))
+        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
+        await dispatch_hackathon(AsyncMock(), AsyncMock(), AsyncMock(), _command("a list", command="/hackathon"))
         mock.assert_awaited_once()
-        assert mock.call_args[1]["command_name"] == "/hackathon"
 
-    async def test_hackathon_help_default_nfcore(self, monkeypatch):
-        """handle_hackathon_help gets command_name='/nf-core' when invoked via /nf-core."""
-        mock = AsyncMock()
-        monkeypatch.setattr("nf_core_bot.commands.router.handle_hackathon_help", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon help", command="/nf-core"))
-        mock.assert_awaited_once()
-        assert mock.call_args[1]["command_name"] == "/nf-core"
 
-    async def test_top_help_receives_command_name(self, monkeypatch):
-        """handle_help gets command_name from the Slack command dict."""
+# ── Command separation ──────────────────────────────────────────────
+
+
+class TestCommandSeparation:
+    """Verify /nf-core and /hackathon are properly separated."""
+
+    async def test_nfcore_does_not_route_hackathon(self):
+        """dispatch() should not handle hackathon subcommands."""
+        ack = AsyncMock()
+        respond = AsyncMock()
+        await dispatch(ack, respond, AsyncMock(), _command("hackathon register"))
+        ack.assert_awaited_once()
+        msg = respond.call_args[0][0]
+        assert "Unknown command" in msg
+
+    async def test_nfcore_help_does_not_list_hackathon_commands(self, monkeypatch):
+        """Top-level /nf-core help should mention /hackathon help, not list hackathon commands."""
         mock = AsyncMock()
         monkeypatch.setattr("nf_core_bot.commands.router.handle_help", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("help", command="/nf-core"))
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("help"))
         mock.assert_awaited_once()
-        assert mock.call_args[1]["command_name"] == "/nf-core"
 
-    async def test_unknown_hackathon_error_uses_hackathon_hint(self):
-        """Unknown hackathon subcommand error should reference /hackathon help when invoked via /hackathon."""
+    async def test_unknown_hackathon_error_references_hackathon_help(self):
+        """Unknown /hackathon subcommand should reference /hackathon help."""
         ack = AsyncMock()
         respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("hackathon bogus", command="/hackathon"))
+        await dispatch_hackathon(ack, respond, AsyncMock(), _command("bogus", command="/hackathon"))
         msg = respond.call_args[0][0]
         assert "/hackathon help" in msg
-        assert "/nf-core" not in msg
 
-    async def test_unknown_hackathon_error_uses_nfcore_hint(self):
-        """Unknown hackathon subcommand error should reference /nf-core hackathon help when invoked via /nf-core."""
+    async def test_unknown_admin_error_references_hackathon_help(self):
+        """Unknown admin subcommand should reference /hackathon help."""
         ack = AsyncMock()
         respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("hackathon bogus", command="/nf-core"))
-        msg = respond.call_args[0][0]
-        assert "/nf-core hackathon help" in msg
-
-    async def test_unknown_admin_error_uses_hackathon_hint(self):
-        """Unknown admin subcommand error should reference /hackathon help when invoked via /hackathon."""
-        ack = AsyncMock()
-        respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("hackathon admin bogus", command="/hackathon"))
+        await dispatch_hackathon(ack, respond, AsyncMock(), _command("admin bogus", command="/hackathon"))
         msg = respond.call_args[0][0]
         assert "/hackathon help" in msg
-        assert "/nf-core" not in msg
 
-    async def test_unknown_top_level_error_uses_command_name(self):
-        """Unknown top-level command error should use the actual command name."""
+    async def test_unknown_nfcore_error_references_nfcore_help(self):
+        """Unknown /nf-core command should reference /nf-core help."""
         ack = AsyncMock()
         respond = AsyncMock()
-        await dispatch(ack, respond, AsyncMock(), _command("bogus", command="/nf-core"))
+        await dispatch(ack, respond, AsyncMock(), _command("bogus"))
         msg = respond.call_args[0][0]
         assert "/nf-core help" in msg

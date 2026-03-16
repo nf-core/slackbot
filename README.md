@@ -52,7 +52,7 @@ Hackathon lifecycle (creation, status changes, form definitions) is managed enti
 
 - **ECS Fargate** — single task, always-on container running the Bolt app in Socket Mode
 - **DynamoDB** — single table, on-demand capacity (free tier is plenty)
-- **ECR** — container registry for the bot image
+- **GHCR** — container registry for the bot image (GitHub Container Registry)
 - **SSM Parameter Store** — secrets (Slack tokens, GitHub PAT)
 - **CloudWatch** — logs and basic monitoring
 
@@ -83,51 +83,39 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 
 ## Command Reference
 
+Two slash commands:
+
 ```bash
-# Help
+# /nf-core — general help, GitHub commands
 /nf-core help
-/nf-core hackathon help
 /nf-core github help
+/nf-core github add-member @slack-user
+/nf-core github add-member <github-username>
 
-# User commands
-/nf-core hackathon list                      # List hackathons with dates, status, event URL
-/nf-core hackathon register                   # Register for the active hackathon
-/nf-core hackathon edit                       # Edit your registration
-/nf-core hackathon cancel                     # Cancel your registration
-
-# Organiser commands (site-scoped)
-/nf-core hackathon attendees [hackathon-id]   # List attendees for your site(s)
-
-# Admin commands (@core-team only)
-/nf-core hackathon admin list                  # All hackathons (including draft/archived)
-/nf-core hackathon admin preview <hackathon-id> # Preview registration form (no data saved)
-
-/nf-core hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
-/nf-core hackathon admin remove-site <hackathon-id> <site-id>
-/nf-core hackathon admin list-sites <hackathon-id>
-
-/nf-core hackathon admin add-organiser <hackathon-id> <site-id> @user
-/nf-core hackathon admin remove-organiser <hackathon-id> <site-id> @user
-
-/nf-core hackathon attendees [hackathon-id]   # Admin sees all sites
-
-# GitHub commands (@core-team only)
-/nf-core github add-member @slack-user        # Invite a specific Slack user
-/nf-core github add-member <github-username>  # Invite by GitHub username directly
-# Message shortcut: right-click a message → More actions → "Add to GitHub org"
+# /hackathon — all hackathon registration and admin commands
+/hackathon help
+/hackathon list                                  # List hackathons
+/hackathon register                              # Register for the active hackathon
+/hackathon edit                                  # Edit your registration
+/hackathon cancel                                # Cancel your registration
+/hackathon sites [hackathon-id]                  # Sites, organisers, registration counts
+/hackathon export [hackathon-id]                 # Export registrations as CSV (organiser+)
+/hackathon admin list                            # All hackathons incl. draft/archived
+/hackathon admin preview [hackathon-id]          # Preview the registration form
+/hackathon admin add-site [hackathon-id]         # Add a site (opens modal)
+/hackathon admin edit-site [hackathon-id] [site] # Edit a site (opens modal)
 ```
 
 See [docs/commands.md](docs/commands.md) for full command reference with examples.
 
 **Notes:**
 
-- Slack allows only one slash command per app — `/nf-core` is the entry point, everything else is parsed as subcommands
-- Slack does not allow custom slash commands in threads — use the "Add to GitHub org" message shortcut instead
 - Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/` — not via slash commands
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
-- All responses to commands are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
+- All responses are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
 - Exception: `github add-member` posts **visible thread replies** so the original requester can see the outcome
 - `help` at each level only shows commands the caller has permission to use
+- Right-click any message → **More actions** → **Add to GitHub org** for thread-friendly GitHub invites
 
 ## Form Configuration
 
@@ -254,7 +242,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
 ## Registration Flow
 
 ```
-1. User: /nf-core hackathon register
+1. User: /hackathon register
 
 2. Bot checks: is there exactly one hackathon YAML with status=open?
    ├─ None → ephemeral: "No hackathon is currently open for registration"
@@ -262,7 +250,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
    └─ One → continue
 
 3. Bot checks: does a registration already exist for this user + hackathon?
-   ├─ Active → ephemeral: "You're already registered! Use `/nf-core hackathon edit` to update"
+   ├─ Active → ephemeral: "You're already registered! Use `/hackathon edit` to update"
    ├─ Cancelled → allow re-registration
    └─ None → continue
 
@@ -289,13 +277,12 @@ Hackathon lifecycle is managed entirely through YAML files — no slash commands
 
 1. **Create the YAML file** — copy an existing form in `forms/` or start from the JSON schema. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new file.
-3. **Preview the form** — `/nf-core hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
-4. **Add sites** — `/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
-5. **Add organisers** — `/nf-core hackathon admin add-organiser 2026-march barcelona @jose`
-6. **Open registrations** — change `status: open` in the YAML, commit, push
-7. **Monitor** — `/nf-core hackathon attendees`
-8. **Close registrations** — change `status: closed` in the YAML, commit, push
-9. **Archive** — change `status: archived` to hide from `hackathon list`
+3. **Preview the form** — `/hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
+4. **Add sites** — `/hackathon admin add-site` (opens a modal form to add sites with organisers)
+5. **Open registrations** — change `status: open` in the YAML, commit, push
+6. **Monitor** — `/hackathon sites` to see registration counts, `/hackathon export` for CSV
+7. **Close registrations** — change `status: closed` in the YAML, commit, push
+8. **Archive** — change `status: archived` to hide from `/hackathon list`
 
 ## Project Structure
 
@@ -325,8 +312,7 @@ nf-core-bot/
 │       │   ├── help.py          # Permission-aware help text
 │       │   ├── hackathon/
 │       │   │   ├── __init__.py
-│       │   │   ├── admin.py     # Admin command handlers (list, preview, site/organiser management)
-│       │   │   ├── attendees.py # Attendee listing (permission-scoped)
+│       │   │   ├── admin.py     # Admin handlers (list, preview, site management, export)
 │       │   │   ├── list_cmd.py  # User-facing hackathon list with registration status
 │       │   │   └── register.py  # Register, edit, cancel handlers
 │       │   ├── github/
@@ -357,7 +343,6 @@ nf-core-bot/
     ├── test_add_member.py
     ├── test_add_member_shortcut.py
     ├── test_admin.py
-    ├── test_attendees.py
     ├── test_db_registrations.py
     ├── test_db_sites.py
     ├── test_form_builder.py
@@ -367,7 +352,7 @@ nf-core-bot/
     ├── test_list_cmd.py
     ├── test_permissions.py
     ├── test_register.py
-    ├── test_router.py
+    ├── test_router_integration.py
     └── test_slack_profile.py
 ```
 

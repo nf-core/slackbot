@@ -60,7 +60,7 @@ async def handle_register(
 
     if existing is not None:
         await respond(
-            text="You're already registered! Use `/nf-core hackathon edit` to update.",
+            text="You're already registered! Use `/hackathon edit` to update.",
             response_type="ephemeral",
         )
         return
@@ -111,7 +111,7 @@ async def handle_edit(
 
     if existing is None:
         await respond(
-            text="You're not registered yet. Use `/nf-core hackathon register` to sign up first.",
+            text="You're not registered yet. Use `/hackathon register` to sign up first.",
             response_type="ephemeral",
         )
         return

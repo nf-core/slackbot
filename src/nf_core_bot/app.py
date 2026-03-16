@@ -21,7 +21,7 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_edit_site_picker,
     handle_admin_site_submission,
 )
-from nf_core_bot.commands.router import dispatch
+from nf_core_bot.commands.router import dispatch, dispatch_hackathon
 from nf_core_bot.db import client as db_client
 from nf_core_bot.forms.handler import (
     handle_country_suggestions,
@@ -53,9 +53,8 @@ async def handle_nf_core(ack, respond, client, command):  # type: ignore[no-unty
 
 @app.command("/hackathon")
 async def handle_hackathon(ack, respond, client, command):  # type: ignore[no-untyped-def]
-    """Shortcut entry-point — prepends 'hackathon' and delegates to the router."""
-    command["text"] = f"hackathon {command.get('text', '')}".strip()
-    await dispatch(ack, respond, client, command)
+    """Hackathon entry-point — delegates to the hackathon router."""
+    await dispatch_hackathon(ack, respond, client, command)
 
 
 # ── Modal callbacks ──────────────────────────────────────────────────

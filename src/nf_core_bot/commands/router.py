@@ -1,7 +1,13 @@
-"""Parse the ``/nf-core`` slash command text and dispatch to handlers.
+"""Parse slash-command text and dispatch to handlers.
 
-The single slash command ``/nf-core <subcommand> [args…]`` is split into
-tokens here and routed to the appropriate handler module.
+Two slash commands share this router:
+
+* ``/nf-core <subcommand>`` — top-level help, GitHub commands
+* ``/hackathon <subcommand>`` — all hackathon commands
+
+``app.py`` registers both commands and delegates to the appropriate
+entry-point in this module (``dispatch`` for ``/nf-core``,
+``dispatch_hackathon`` for ``/hackathon``).
 """
 
 from __future__ import annotations
@@ -66,23 +72,16 @@ async def dispatch(
 ) -> None:
     """Route ``/nf-core <text>`` to the correct handler.
 
-    This is the single callback registered on the ``/nf-core`` command
-    in ``app.py``.
+    Handles top-level help and GitHub commands only.
+    Hackathon commands go through :func:`dispatch_hackathon`.
     """
     raw_text: str = command.get("text", "").strip()
     sub, rest = _parse_subcommand(raw_text)
     user_id: str = command["user_id"]
 
-    command_name: str = command.get("command", "/nf-core")
-
     # ── Top-level commands ───────────────────────────────────────────
     if sub == "help":
-        await handle_help(ack, respond, client, user_id, command_name=command_name)
-        return
-
-    # ── Hackathon commands ───────────────────────────────────────────
-    if sub in ("hackathon", "hackathons", "hack", "h"):
-        await _route_hackathon(ack, respond, client, user_id, command, rest)
+        await handle_help(ack, respond, client, user_id)
         return
 
     # ── GitHub commands ──────────────────────────────────────────────
@@ -93,9 +92,25 @@ async def dispatch(
     # ── Unknown ──────────────────────────────────────────────────────
     await ack()
     await respond(
-        f"Unknown command: `{sub}`. Run `{command_name} help` for a list of commands.",
+        f"Unknown command: `{sub}`. Run `/nf-core help` for a list of commands.",
         response_type="ephemeral",
     )
+
+
+async def dispatch_hackathon(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    command: dict[str, str],
+) -> None:
+    """Route ``/hackathon <text>`` to the correct handler."""
+    raw_text: str = command.get("text", "").strip()
+    user_id: str = command["user_id"]
+    _, tokens = _parse_subcommand(raw_text)
+    # _parse_subcommand returns ("help", []) for empty input, but for
+    # /hackathon we want the first token as the subcommand directly.
+    all_tokens = raw_text.split() if raw_text else []
+    await _route_hackathon(ack, respond, client, user_id, command, all_tokens)
 
 
 async def _route_hackathon(
@@ -106,11 +121,9 @@ async def _route_hackathon(
     command: dict[str, str],
     tokens: list[str],
 ) -> None:
-    """Dispatch ``/nf-core hackathon <sub> [args…]``."""
-    command_name: str = command.get("command", "/nf-core")
-
+    """Dispatch ``/hackathon <sub> [args…]``."""
     if not tokens or tokens[0].lower() == "help":
-        await handle_hackathon_help(ack, respond, client, user_id, command_name=command_name)
+        await handle_hackathon_help(ack, respond, client, user_id)
         return
 
     sub = tokens[0].lower()
@@ -123,9 +136,6 @@ async def _route_hackathon(
         "trigger_id": command.get("trigger_id", ""),
         "user_id": user_id,
     }
-
-    # Help hint adapts to the slash command used.
-    help_hint = "/hackathon help" if command_name == "/hackathon" else "/nf-core hackathon help"
 
     if sub == "register":
         await handle_register(ack, respond, client, body)
@@ -140,11 +150,11 @@ async def _route_hackathon(
     elif sub == "export":
         await handle_export(ack, respond, client, body, rest)
     elif sub == "admin":
-        await _route_admin(ack, respond, client, body, rest, help_hint=help_hint)
+        await _route_admin(ack, respond, client, body, rest)
     else:
         await ack()
         await respond(
-            f"Unknown hackathon command: `{sub}`. Run `{help_hint}` for options.",
+            f"Unknown hackathon command: `{sub}`. Run `/hackathon help` for options.",
             response_type="ephemeral",
         )
 
@@ -155,14 +165,12 @@ async def _route_admin(
     client: AsyncWebClient,
     body: dict[str, str],
     tokens: list[str],
-    *,
-    help_hint: str = "/nf-core hackathon help",
 ) -> None:
-    """Dispatch ``/nf-core hackathon admin <sub> [args…]``."""
+    """Dispatch ``/hackathon admin <sub> [args…]``."""
     if not tokens:
         await ack()
         await respond(
-            f"Missing admin subcommand. Run `{help_hint}` for options.",
+            "Missing admin subcommand. Run `/hackathon help` for options.",
             response_type="ephemeral",
         )
         return
@@ -174,7 +182,7 @@ async def _route_admin(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown admin command: `{sub}`. Run `{help_hint}` for options.",
+            f"Unknown admin command: `{sub}`. Run `/hackathon help` for options.",
             response_type="ephemeral",
         )
         return
@@ -202,10 +210,8 @@ async def _route_github(
     tokens: list[str],
 ) -> None:
     """Dispatch ``/nf-core github <sub> [args…]``."""
-    command_name: str = command.get("command", "/nf-core")
-
     if not tokens or tokens[0].lower() == "help":
-        await handle_github_help(ack, respond, client, user_id, command_name=command_name)
+        await handle_github_help(ack, respond, client, user_id)
         return
 
     sub = tokens[0].lower()
@@ -215,7 +221,7 @@ async def _route_github(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown github command: `{sub}`. Run `{command_name} github help` for options.",
+            f"Unknown github command: `{sub}`. Run `/nf-core github help` for options.",
             response_type="ephemeral",
         )
         return
