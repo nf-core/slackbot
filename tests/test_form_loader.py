@@ -251,7 +251,7 @@ class TestFormMetadataFields:
 
     def test_form_has_status(self) -> None:
         form = load_form_by_hackathon("2026-march")
-        assert form.status == "draft"
+        assert form.status == "open"
 
     def test_form_has_channel_id(self) -> None:
         form = load_form_by_hackathon("2026-march")
@@ -330,10 +330,12 @@ class TestListAllForms:
 class TestGetActiveForm:
     """Test the get_active_form function."""
 
-    def test_returns_none_when_no_open(self) -> None:
-        # The 2026-march form has status "draft", not "open"
+    def test_returns_open_form(self) -> None:
+        # The 2026-march form has status "open".
         result = get_active_form()
-        assert result is None  # since we set status to draft in the YAML
+        assert result is not None
+        assert result["hackathon_id"] == "2026-march"
+        assert result["status"] == "open"
 
 
 # ---------------------------------------------------------------------------

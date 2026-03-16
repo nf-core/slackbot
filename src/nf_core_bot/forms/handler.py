@@ -232,43 +232,62 @@ async def handle_registration_step(
         await ack(response_action="clear")
         if preview:
             # Preview mode — no persistence, show collected answers
-            # including auto-populated profile fields, in form order.
+            # as Block Kit section fields in the order shown to the user.
             try:
                 profile_data = await _get_profile_data(client, user_id)
-                lines = [":eyes: *Preview complete* — no registration was saved.\n"]
+                blocks: list[dict[str, Any]] = [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": ":eyes: *Preview complete* — no registration was saved."},
+                    },
+                    {
+                        "type": "header",
+                        "text": {"type": "plain_text", "text": "Auto-populated from Slack profile"},
+                    },
+                ]
 
-                # Auto-populated profile fields first.
-                lines.append("*Auto-populated from Slack profile:*")
+                # Profile fields as a section with field pairs.
+                profile_labels = {
+                    "email": "Email address",
+                    "slack_display_name": "Slack display name",
+                    "github_username": "GitHub username",
+                }
+                profile_fields: list[dict[str, Any]] = []
                 for key in ("email", "slack_display_name", "github_username"):
                     display = str(profile_data.get(key, "")) or "_(empty)_"
-                    lines.append(f"• `{key}`: {display}")
+                    profile_fields.append({"type": "mrkdwn", "text": f"*{profile_labels[key]}*"})
+                    profile_fields.append({"type": "mrkdwn", "text": display})
+                blocks.append({"type": "section", "fields": profile_fields})
 
-                # Walk steps/fields in the order they were shown.
-                lines.append("\n*Submitted answers:*")
-                shown_ids: set[str] = set()
+                # Form answers in step/field order.
+                blocks.append(
+                    {
+                        "type": "header",
+                        "text": {"type": "plain_text", "text": "Submitted answers"},
+                    }
+                )
+
+                # Section blocks support max 10 fields (= 5 Q/A pairs).
+                pair_buf: list[dict[str, Any]] = []
                 for step in applicable_steps:
                     for field in step.fields:
-                        shown_ids.add(field.id)
                         value = answers.get(field.id)
                         if isinstance(value, list):
                             display = ", ".join(str(v) for v in value)
                         else:
                             display = str(value) if value else "_(empty)_"
-                        lines.append(f"• `{field.id}` {field.label}\n   {display}")
-
-                # Any leftover answers not tied to a known field (shouldn't
-                # happen, but defensive).
-                for key, value in answers.items():
-                    if key not in shown_ids:
-                        if isinstance(value, list):
-                            display = ", ".join(str(v) for v in value)
-                        else:
-                            display = str(value) if value else "_(empty)_"
-                        lines.append(f"• `{key}`: {display}")
+                        pair_buf.append({"type": "mrkdwn", "text": f"*{field.label}*"})
+                        pair_buf.append({"type": "mrkdwn", "text": display})
+                        if len(pair_buf) >= 10:
+                            blocks.append({"type": "section", "fields": pair_buf})
+                            pair_buf = []
+                if pair_buf:
+                    blocks.append({"type": "section", "fields": pair_buf})
 
                 await client.chat_postMessage(
                     channel=user_id,
-                    text="\n".join(lines),
+                    text="Preview complete — no registration was saved.",
+                    blocks=blocks,
                 )
             except Exception:
                 logger.exception("Failed to send preview confirmation to user %s.", user_id)
