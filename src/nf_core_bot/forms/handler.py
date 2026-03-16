@@ -232,21 +232,40 @@ async def handle_registration_step(
         await ack(response_action="clear")
         if preview:
             # Preview mode — no persistence, show collected answers
-            # including auto-populated profile fields.
+            # including auto-populated profile fields, in form order.
             try:
                 profile_data = await _get_profile_data(client, user_id)
                 lines = [":eyes: *Preview complete* — no registration was saved.\n"]
+
+                # Auto-populated profile fields first.
                 lines.append("*Auto-populated from Slack profile:*")
-                for key, value in sorted(profile_data.items()):
-                    display = str(value) if value else "_(empty)_"
-                    lines.append(f"• *{key}*: {display}")
+                for key in ("email", "slack_display_name", "github_username"):
+                    display = str(profile_data.get(key, "")) or "_(empty)_"
+                    lines.append(f"• `{key}`: {display}")
+
+                # Walk steps/fields in the order they were shown.
                 lines.append("\n*Submitted answers:*")
-                for key, value in sorted(answers.items()):
-                    if isinstance(value, list):
-                        display = ", ".join(str(v) for v in value)
-                    else:
-                        display = str(value) if value else "_(empty)_"
-                    lines.append(f"• *{key}*: {display}")
+                shown_ids: set[str] = set()
+                for step in applicable_steps:
+                    for field in step.fields:
+                        shown_ids.add(field.id)
+                        value = answers.get(field.id)
+                        if isinstance(value, list):
+                            display = ", ".join(str(v) for v in value)
+                        else:
+                            display = str(value) if value else "_(empty)_"
+                        lines.append(f"• `{field.id}` {field.label}\n   {display}")
+
+                # Any leftover answers not tied to a known field (shouldn't
+                # happen, but defensive).
+                for key, value in answers.items():
+                    if key not in shown_ids:
+                        if isinstance(value, list):
+                            display = ", ".join(str(v) for v in value)
+                        else:
+                            display = str(value) if value else "_(empty)_"
+                        lines.append(f"• `{key}`: {display}")
+
                 await client.chat_postMessage(
                     channel=user_id,
                     text="\n".join(lines),
