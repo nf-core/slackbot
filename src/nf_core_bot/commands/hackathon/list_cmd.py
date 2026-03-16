@@ -9,7 +9,7 @@ import datetime
 import logging
 from typing import TYPE_CHECKING, Any
 
-from nf_core_bot.db.registrations import count_registrations, get_registration
+from nf_core_bot.db.registrations import count_registrations
 from nf_core_bot.forms.loader import list_all_forms
 
 if TYPE_CHECKING:
@@ -64,10 +64,8 @@ async def handle_list(
     client: AsyncWebClient,
     body: dict[str, Any],
 ) -> None:
-    """List all non-archived hackathons with the caller's registration status."""
+    """List all non-archived hackathons."""
     await ack()
-
-    user_id: str = body["user_id"]
 
     try:
         hackathons = list_all_forms()
@@ -113,24 +111,12 @@ async def handle_list(
         else:
             status_line = f":white_circle: *{status_label}*"
 
-        # Check user registration and total count.
+        # Total registration count.
         try:
-            registration = await get_registration(hackathon_id, user_id)
             total = await count_registrations(hackathon_id)
         except Exception:
             logger.exception("Failed to fetch registration data for hackathon '%s'.", hackathon_id)
-            registration = None
             total = 0
-
-        # Registration status for this user.
-        if registration is not None:
-            site_id = registration.get("site_id")
-            location = f"site: {site_id}" if site_id else "online"
-            reg_line = f":white_check_mark: You're registered ({location})"
-        elif status == "open":
-            reg_line = "Not registered — use `/nf-core-bot hackathon register` to sign up!"
-        else:
-            reg_line = ""
 
         # Assemble the section text.
         lines = [f"*{title}*"]
@@ -138,12 +124,10 @@ async def handle_list(
             lines.append(date_line)
         lines.append(status_line)
         lines.append(f"{total} registered")
-        if reg_line:
-            lines.append(reg_line)
 
         url = hackathon.get("url")
         if url:
-            lines.append(f"<{url}|More info>")
+            lines.append(f"<{url}|Event website>")
 
         blocks.append(
             {

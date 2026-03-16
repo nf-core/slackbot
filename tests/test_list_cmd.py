@@ -81,7 +81,7 @@ class TestNoHackathons:
 
 
 class TestHackathonDisplay:
-    async def test_shows_open_hackathon_with_registration(
+    async def test_shows_open_hackathon(
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
@@ -96,10 +96,6 @@ class TestHackathonDisplay:
                     "url": "https://nf-co.re/events/2026/hackathon-march-2026",
                 },
             ],
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.list_cmd.get_registration",
-            AsyncMock(return_value={"user_id": "U_USER", "site_id": "stockholm"}),
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.list_cmd.count_registrations",
@@ -116,43 +112,8 @@ class TestHackathonDisplay:
         )
         assert "March 2026" in section_texts
         assert "Open" in section_texts
-        assert "registered" in section_texts.lower()
-        assert "42" in section_texts
-
-    async def test_shows_not_registered_for_open(
-        self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.list_cmd.list_all_forms",
-            lambda: [
-                {
-                    "hackathon_id": "h1",
-                    "title": "March 2026",
-                    "status": "open",
-                    "date_start": "2026-03-11",
-                    "date_end": "2026-03-13",
-                    "url": "https://nf-co.re/events/2026/hackathon-march-2026",
-                },
-            ],
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.list_cmd.get_registration",
-            AsyncMock(return_value=None),
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.list_cmd.count_registrations",
-            AsyncMock(return_value=10),
-        )
-
-        await handle_list(ack, respond, client, _body())
-
-        ack.assert_awaited_once()
-        blocks = respond.call_args.kwargs["blocks"]
-        section_texts = " ".join(
-            b["text"]["text"] for b in blocks if b.get("type") == "section" and "text" in b.get("text", {})
-        )
-        assert "Not registered" in section_texts
-        assert "register" in section_texts.lower()
+        assert "42 registered" in section_texts
+        assert "Event website" in section_texts
 
     async def test_multiple_hackathons_mixed_status(
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
@@ -185,10 +146,6 @@ class TestHackathonDisplay:
                     "url": "https://nf-co.re/events/2025/hackathon-jan-2025",
                 },
             ],
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.list_cmd.get_registration",
-            AsyncMock(return_value=None),
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.list_cmd.count_registrations",
