@@ -46,8 +46,15 @@ app = AsyncApp(
 
 
 @app.command("/nf-core")
-async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-untyped-def]
-    """Single entry-point — delegates to the router."""
+async def handle_nf_core(ack, respond, client, command):  # type: ignore[no-untyped-def]
+    """Main entry-point — delegates to the router."""
+    await dispatch(ack, respond, client, command)
+
+
+@app.command("/hackathon")
+async def handle_hackathon(ack, respond, client, command):  # type: ignore[no-untyped-def]
+    """Shortcut entry-point — prepends 'hackathon' and delegates to the router."""
+    command["text"] = f"hackathon {command.get('text', '')}".strip()
     await dispatch(ack, respond, client, command)
 
 
