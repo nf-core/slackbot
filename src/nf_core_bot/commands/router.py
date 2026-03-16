@@ -84,7 +84,7 @@ async def dispatch(
         return
 
     # ── Hackathon commands ───────────────────────────────────────────
-    if sub == "hackathon":
+    if sub in ("hackathon", "hackathons", "hack", "h"):
         await _route_hackathon(ack, respond, client, user_id, command, rest)
         return
 
@@ -161,6 +161,9 @@ async def _route_admin(
 
     sub = tokens[0].lower()
     rest = tokens[1:]
+
+    # Normalise US spelling → UK spelling for organiser commands.
+    sub = sub.replace("organizer", "organiser")
 
     handler = _ADMIN_DISPATCH.get(sub)
     if handler is None:

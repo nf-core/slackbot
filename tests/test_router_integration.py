@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 import nf_core_bot.commands.router as router_mod
 from nf_core_bot.commands.router import dispatch
 
@@ -239,3 +241,39 @@ class TestUnknownCommandsAck:
         respond = AsyncMock()
         await dispatch(ack, respond, AsyncMock(), _command("hackathon admin unknown"))
         ack.assert_awaited_once()
+
+
+class TestHackathonAliases:
+    """Verify that 'h', 'hack', and 'hackathons' route like 'hackathon'."""
+
+    @pytest.mark.parametrize("alias", ["h", "hack", "hackathons"])
+    async def test_alias_routes_to_hackathon(self, alias: str, monkeypatch):
+        """Each alias should dispatch the same as 'hackathon'."""
+        mock = AsyncMock()
+        monkeypatch.setattr(router_mod, "_route_hackathon", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} list"))
+        mock.assert_awaited_once()
+
+    @pytest.mark.parametrize("alias", ["h", "hack", "hackathons"])
+    async def test_alias_admin_dispatches(self, alias: str, monkeypatch):
+        mock = AsyncMock()
+        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} admin list"))
+        mock.assert_awaited_once()
+
+
+class TestOrganizerSpellingAliases:
+    """Verify that US 'organizer' spelling routes to UK 'organiser' handlers."""
+
+    @pytest.mark.parametrize(
+        "us_cmd,uk_cmd",
+        [
+            ("add-organizer", "add-organiser"),
+            ("remove-organizer", "remove-organiser"),
+        ],
+    )
+    async def test_us_spelling_dispatches_to_uk_handler(self, us_cmd: str, uk_cmd: str, monkeypatch):
+        mock = AsyncMock()
+        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, uk_cmd, mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"hackathon admin {us_cmd} U123"))
+        mock.assert_awaited_once()

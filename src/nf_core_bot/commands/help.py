@@ -24,7 +24,7 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("hackathon attendees [hackathon-id]", "List attendees (optionally by site)", "organiser"),
     ("hackathon admin list", "List all hackathons", "admin"),
     ("hackathon admin preview [hackathon-id]", "Preview the registration form", "admin"),
-    ("hackathon admin add-site [hackathon-id] <site-id> <name> | <city> | <country>", "Add a local site", "admin"),
+    ("hackathon admin add-site", "Add a local site (opens a form)", "admin"),
     ("hackathon admin remove-site [hackathon-id] <site-id>", "Remove a local site", "admin"),
     ("hackathon admin list-sites [hackathon-id]", "List sites for a hackathon", "admin"),
     ("hackathon admin add-organiser [hackathon-id] <site-id> @user", "Add a site organiser", "admin"),
@@ -108,6 +108,7 @@ async def handle_hackathon_help(
 
     sections = ["*Hackathon commands*\n"]
     sections.append(_format_commands(visible))
+    sections.append("\n_Tip: you can use `h`, `hack`, or `hackathons` as shortcuts for `hackathon`._")
 
     await respond("\n".join(sections), response_type="ephemeral")
 
