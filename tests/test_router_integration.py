@@ -16,12 +16,13 @@ import nf_core_bot.commands.router as router_mod
 from nf_core_bot.commands.router import dispatch
 
 
-def _command(text: str = "") -> dict[str, str]:
+def _command(text: str = "", command: str = "/nf-core") -> dict[str, str]:
     """Build a minimal Slack command dict."""
     return {
         "text": text,
         "user_id": "U_TEST",
         "trigger_id": "T_TEST",
+        "command": command,
     }
 
 
@@ -223,3 +224,69 @@ class TestHackathonAliases:
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
         await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} admin list"))
         mock.assert_awaited_once()
+
+
+# ── /hackathon command name threading ───────────────────────────────
+
+
+class TestCommandNameThreading:
+    """Verify that the command name (/nf-core vs /hackathon) is threaded
+    through to help handlers and error messages."""
+
+    async def test_hackathon_help_receives_command_name(self, monkeypatch):
+        """handle_hackathon_help gets command_name='/hackathon' when invoked via /hackathon."""
+        mock = AsyncMock()
+        monkeypatch.setattr("nf_core_bot.commands.router.handle_hackathon_help", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon help", command="/hackathon"))
+        mock.assert_awaited_once()
+        assert mock.call_args[1]["command_name"] == "/hackathon"
+
+    async def test_hackathon_help_default_nfcore(self, monkeypatch):
+        """handle_hackathon_help gets command_name='/nf-core' when invoked via /nf-core."""
+        mock = AsyncMock()
+        monkeypatch.setattr("nf_core_bot.commands.router.handle_hackathon_help", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon help", command="/nf-core"))
+        mock.assert_awaited_once()
+        assert mock.call_args[1]["command_name"] == "/nf-core"
+
+    async def test_top_help_receives_command_name(self, monkeypatch):
+        """handle_help gets command_name from the Slack command dict."""
+        mock = AsyncMock()
+        monkeypatch.setattr("nf_core_bot.commands.router.handle_help", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("help", command="/nf-core"))
+        mock.assert_awaited_once()
+        assert mock.call_args[1]["command_name"] == "/nf-core"
+
+    async def test_unknown_hackathon_error_uses_hackathon_hint(self):
+        """Unknown hackathon subcommand error should reference /hackathon help when invoked via /hackathon."""
+        ack = AsyncMock()
+        respond = AsyncMock()
+        await dispatch(ack, respond, AsyncMock(), _command("hackathon bogus", command="/hackathon"))
+        msg = respond.call_args[0][0]
+        assert "/hackathon help" in msg
+        assert "/nf-core" not in msg
+
+    async def test_unknown_hackathon_error_uses_nfcore_hint(self):
+        """Unknown hackathon subcommand error should reference /nf-core hackathon help when invoked via /nf-core."""
+        ack = AsyncMock()
+        respond = AsyncMock()
+        await dispatch(ack, respond, AsyncMock(), _command("hackathon bogus", command="/nf-core"))
+        msg = respond.call_args[0][0]
+        assert "/nf-core hackathon help" in msg
+
+    async def test_unknown_admin_error_uses_hackathon_hint(self):
+        """Unknown admin subcommand error should reference /hackathon help when invoked via /hackathon."""
+        ack = AsyncMock()
+        respond = AsyncMock()
+        await dispatch(ack, respond, AsyncMock(), _command("hackathon admin bogus", command="/hackathon"))
+        msg = respond.call_args[0][0]
+        assert "/hackathon help" in msg
+        assert "/nf-core" not in msg
+
+    async def test_unknown_top_level_error_uses_command_name(self):
+        """Unknown top-level command error should use the actual command name."""
+        ack = AsyncMock()
+        respond = AsyncMock()
+        await dispatch(ack, respond, AsyncMock(), _command("bogus", command="/nf-core"))
+        msg = respond.call_args[0][0]
+        assert "/nf-core help" in msg

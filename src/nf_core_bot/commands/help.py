@@ -41,11 +41,27 @@ GENERAL_COMMANDS: list[tuple[str, str, str]] = [
 ]
 
 
-def _format_commands(cmds: list[tuple[str, str, str]]) -> str:
-    """Render a list of commands as a Slack mrkdwn string."""
+def _format_commands(
+    cmds: list[tuple[str, str, str]],
+    prefix: str = "/nf-core",
+    strip_namespace: str | None = None,
+) -> str:
+    """Render a list of commands as a Slack mrkdwn string.
+
+    *strip_namespace* removes a leading namespace from each command
+    string.  For example, when invoked via ``/hackathon``, set
+    ``strip_namespace="hackathon"`` so that ``hackathon register``
+    renders as ``/hackathon register`` rather than
+    ``/hackathon hackathon register``.
+    """
     lines: list[str] = []
     for cmd, desc, _ in cmds:
-        lines.append(f"  `/nf-core {cmd}` — {desc}")
+        if strip_namespace and cmd.startswith(strip_namespace):
+            cmd = cmd[len(strip_namespace) :].lstrip()
+            if not cmd:
+                cmd = ""
+        display = f"  `{prefix} {cmd}`" if cmd else f"  `{prefix}`"
+        lines.append(f"{display} — {desc}")
     return "\n".join(lines)
 
 
@@ -54,6 +70,7 @@ async def handle_help(
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
+    command_name: str = "/nf-core",
 ) -> None:
     """Top-level help: ``/nf-core help``."""
     await ack()
@@ -66,10 +83,10 @@ async def handle_help(
             visible.append((cmd, desc, role))
 
     sections: list[str] = ["*nf-core bot — available commands*\n"]
-    sections.append(_format_commands(visible))
-    sections.append("\nRun `/nf-core hackathon help` for hackathon commands.")
+    sections.append(_format_commands(visible, prefix=command_name))
+    sections.append(f"\nRun `{command_name} hackathon help` for hackathon commands.")
     if admin:
-        sections.append("Run `/nf-core github help` for GitHub commands.")
+        sections.append(f"Run `{command_name} github help` for GitHub commands.")
 
     await respond("\n".join(sections), response_type="ephemeral")
 
@@ -79,6 +96,7 @@ async def handle_hackathon_help(
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
+    command_name: str = "/nf-core",
 ) -> None:
     """Hackathon-scoped help: ``/nf-core hackathon help``.
 
@@ -104,9 +122,14 @@ async def handle_hackathon_help(
         if (role == "all") or (role == "organiser" and (organiser or admin)) or (role == "admin" and admin):
             visible.append((cmd, desc, role))
 
+    via_hackathon = command_name == "/hackathon"
+    prefix = "/hackathon" if via_hackathon else "/nf-core"
+    strip_ns = "hackathon" if via_hackathon else None
+
     sections = ["*Hackathon commands*\n"]
-    sections.append(_format_commands(visible))
-    sections.append("\n_Tip: you can use `h`, `hack`, or `hackathons` as shortcuts for `hackathon`._")
+    sections.append(_format_commands(visible, prefix=prefix, strip_namespace=strip_ns))
+    if not via_hackathon:
+        sections.append("\n_Tip: you can use `h`, `hack`, or `hackathons` as shortcuts for `hackathon`._")
 
     await respond("\n".join(sections), response_type="ephemeral")
 
@@ -116,6 +139,7 @@ async def handle_github_help(
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
+    command_name: str = "/nf-core",
 ) -> None:
     """GitHub-scoped help: ``/nf-core github help``.
 
@@ -133,7 +157,7 @@ async def handle_github_help(
         return
 
     sections = ["*GitHub commands* (`@core-team` only)\n"]
-    sections.append(_format_commands(GITHUB_COMMANDS))
+    sections.append(_format_commands(GITHUB_COMMANDS, prefix=command_name))
     sections.append(
         "\nYou can also right-click any message and use *More actions → Add to GitHub org* "
         "to invite the message author."

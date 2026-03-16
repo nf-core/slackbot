@@ -73,9 +73,11 @@ async def dispatch(
     sub, rest = _parse_subcommand(raw_text)
     user_id: str = command["user_id"]
 
+    command_name: str = command.get("command", "/nf-core")
+
     # ── Top-level commands ───────────────────────────────────────────
     if sub == "help":
-        await handle_help(ack, respond, client, user_id)
+        await handle_help(ack, respond, client, user_id, command_name=command_name)
         return
 
     # ── Hackathon commands ───────────────────────────────────────────
@@ -91,7 +93,7 @@ async def dispatch(
     # ── Unknown ──────────────────────────────────────────────────────
     await ack()
     await respond(
-        f"Unknown command: `{sub}`. Run `/nf-core help` for a list of commands.",
+        f"Unknown command: `{sub}`. Run `{command_name} help` for a list of commands.",
         response_type="ephemeral",
     )
 
@@ -105,8 +107,10 @@ async def _route_hackathon(
     tokens: list[str],
 ) -> None:
     """Dispatch ``/nf-core hackathon <sub> [args…]``."""
+    command_name: str = command.get("command", "/nf-core")
+
     if not tokens or tokens[0].lower() == "help":
-        await handle_hackathon_help(ack, respond, client, user_id)
+        await handle_hackathon_help(ack, respond, client, user_id, command_name=command_name)
         return
 
     sub = tokens[0].lower()
@@ -119,6 +123,9 @@ async def _route_hackathon(
         "trigger_id": command.get("trigger_id", ""),
         "user_id": user_id,
     }
+
+    # Help hint adapts to the slash command used.
+    help_hint = "/hackathon help" if command_name == "/hackathon" else "/nf-core hackathon help"
 
     if sub == "register":
         await handle_register(ack, respond, client, body)
@@ -133,11 +140,11 @@ async def _route_hackathon(
     elif sub == "export":
         await handle_export(ack, respond, client, body, rest)
     elif sub == "admin":
-        await _route_admin(ack, respond, client, body, rest)
+        await _route_admin(ack, respond, client, body, rest, help_hint=help_hint)
     else:
         await ack()
         await respond(
-            f"Unknown hackathon command: `{sub}`. Run `/nf-core hackathon help` for options.",
+            f"Unknown hackathon command: `{sub}`. Run `{help_hint}` for options.",
             response_type="ephemeral",
         )
 
@@ -148,12 +155,14 @@ async def _route_admin(
     client: AsyncWebClient,
     body: dict[str, str],
     tokens: list[str],
+    *,
+    help_hint: str = "/nf-core hackathon help",
 ) -> None:
     """Dispatch ``/nf-core hackathon admin <sub> [args…]``."""
     if not tokens:
         await ack()
         await respond(
-            "Missing admin subcommand. Run `/nf-core hackathon help` for options.",
+            f"Missing admin subcommand. Run `{help_hint}` for options.",
             response_type="ephemeral",
         )
         return
@@ -165,7 +174,7 @@ async def _route_admin(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown admin command: `{sub}`. Run `/nf-core hackathon help` for options.",
+            f"Unknown admin command: `{sub}`. Run `{help_hint}` for options.",
             response_type="ephemeral",
         )
         return
@@ -193,8 +202,10 @@ async def _route_github(
     tokens: list[str],
 ) -> None:
     """Dispatch ``/nf-core github <sub> [args…]``."""
+    command_name: str = command.get("command", "/nf-core")
+
     if not tokens or tokens[0].lower() == "help":
-        await handle_github_help(ack, respond, client, user_id)
+        await handle_github_help(ack, respond, client, user_id, command_name=command_name)
         return
 
     sub = tokens[0].lower()
@@ -204,7 +215,7 @@ async def _route_github(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown github command: `{sub}`. Run `/nf-core github help` for options.",
+            f"Unknown github command: `{sub}`. Run `{command_name} github help` for options.",
             response_type="ephemeral",
         )
         return
