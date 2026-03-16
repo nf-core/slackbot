@@ -128,7 +128,7 @@ async def list_sites(hackathon_id: str) -> list[dict[str, Any]]:
             # Exclude organiser rows (SK contains '#ORG#') — filtered
             # in Python because DynamoDB does not allow key attributes
             # in FilterExpression.
-            items.extend(item for item in response.get("Items", []) if "#ORG#" not in item.get("SK", ""))
+            items.extend(item for item in response.get("Items", []) if "#ORG#" not in str(item.get("SK", "")))
             last_key = response.get("LastEvaluatedKey")
             if last_key is None:
                 break
