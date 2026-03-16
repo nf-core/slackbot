@@ -100,7 +100,7 @@ Create a file `github-actions-trust-policy.json`:
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:nf-core/nf-core-slackbot:*"
+          "token.actions.githubusercontent.com:sub": "repo:nf-core/slackbot:*"
         }
       }
     }
@@ -118,7 +118,7 @@ aws --profile nf-core iam attach-role-policy \
   --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
 ```
 
-> **Note:** `AdministratorAccess` is used because CDK needs broad permissions to create/manage VPC, ECS, DynamoDB, IAM roles, etc. You can scope this down to a custom policy later if desired. The trust policy restricts this role to only be assumable by the `nf-core/nf-core-slackbot` GitHub repository.
+> **Note:** `AdministratorAccess` is used because CDK needs broad permissions to create/manage VPC, ECS, DynamoDB, IAM roles, etc. You can scope this down to a custom policy later if desired. The trust policy restricts this role to only be assumable by the `nf-core/slackbot` GitHub repository.
 
 #### Add the role ARN as a GitHub repository secret:
 

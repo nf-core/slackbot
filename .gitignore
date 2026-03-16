@@ -10,3 +10,7 @@ build/
 .ruff_cache/
 .env
 .venv/
+
+# CDK
+infra/cdk.out/
+infra/cdk.context.json
