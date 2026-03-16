@@ -111,7 +111,7 @@ Export all registrations as a CSV file, uploaded to a DM with you. Includes prof
 
 All admin commands require `@core-team` Slack user group membership.
 
-> **Note:** Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/`, not via slash commands. See [Managing Hackathon Lifecycle](#managing-hackathon-lifecycle) below.
+> **Note:** Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `hackathons/`, not via slash commands. See [Managing Hackathon Lifecycle](#managing-hackathon-lifecycle) below.
 
 ### `admin list`
 
@@ -119,7 +119,7 @@ All admin commands require `@core-team` Slack user group membership.
 /hackathon admin list
 ```
 
-List all hackathons including draft and archived ones, with their current status, dates, and event URL. This shows hackathons from all YAML files in `forms/`.
+List all hackathons including draft and archived ones, with their current status, dates, and event URL. This shows hackathons from all YAML files in `hackathons/`.
 
 ### `admin preview`
 
@@ -155,12 +155,12 @@ Opens a two-step flow: first a picker modal to select the hackathon and site, th
 
 ## Managing Hackathon Lifecycle
 
-Hackathon creation and status changes are managed through YAML files in the `forms/` directory — not via slash commands. Each YAML file contains both hackathon metadata and the registration form definition.
+Hackathon creation and status changes are managed through YAML files in the `hackathons/` directory — not via slash commands. Each YAML file contains both hackathon metadata and the registration form definition.
 
 ### YAML form format
 
 ```yaml
-# forms/2026-march.yaml
+# hackathons/2026-march.yaml
 # yaml-language-server: $schema=../schemas/hackathon-form.schema.json
 hackathon: 2026-march
 title: "nf-core Hackathon — March 2026"
@@ -184,7 +184,7 @@ The `channel` field accepts either a Slack channel URL (`https://nfcore.slack.co
 
 ### Admin workflow
 
-1. **Create the YAML file** — copy an existing form in `forms/` or start fresh using the JSON schema for guidance. Set `status: draft`.
+1. **Create the YAML file** — copy an existing form in `hackathons/` or start fresh using the JSON schema for guidance. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new hackathon.
 3. **Preview the form** — `/hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
 4. **Add sites** — `/hackathon admin add-site` (opens a form to add sites with organisers).
@@ -201,6 +201,29 @@ The `channel` field accepts either a Slack channel URL (`https://nfcore.slack.co
 | `open` | Users can register. Shown in `/hackathon list`. Only one hackathon should be open at a time. |
 | `closed` | Registrations are closed. Still visible in `/hackathon list`. |
 | `archived` | Hidden from `/hackathon list`. Only visible via `admin list`. |
+
+### Hackathon Modes
+
+The hackathon mode (hybrid, in-person, online, etc.) is determined entirely by how you author the YAML form — no special `mode` field is needed. The conditional step system handles everything.
+
+#### Hybrid (in-person sites + online)
+
+This is the default pattern used by `2026-march.yaml`. The form asks "Will you attend a local site?" and conditionally shows either the site selection step or online details (timezone) based on the answer.
+
+- Requires: `attend_local_site` yes/no field, conditional `local_site_selection` step (with `options_from: sites`), conditional `online_details` step
+- Sites must be created in DynamoDB via `/hackathon admin add-site`
+
+#### In-person only (multiple sites)
+
+Remove the `attend_local_site` question and the `online_details` step. Make the `local_site_selection` step unconditional (no `condition` field). Everyone must pick a site.
+
+#### Online only
+
+Remove the `attend_local_site` question, the `local_site_selection` step, and the `local_site` field entirely. Optionally keep a timezone field. No sites needed in DynamoDB — all registrations have `site_id = None`.
+
+#### Single-location in-person
+
+Same as online only from the system's perspective: no `local_site` field, no site selection. All registrations have `site_id = None`. The form text (welcome step, etc.) describes the physical venue. No sites needed in DynamoDB.
 
 ---
 

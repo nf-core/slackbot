@@ -16,7 +16,7 @@ nf-core-bot is a Slack bot for the nf-core bioinformatics community. The primary
 ## Key Design Decisions
 
 - Single slash command `/nf-core` with subcommand routing (Slack only allows one slash command per app)
-- YAML-first hackathon lifecycle: metadata (title, status, dates, channel, URL) and form definitions live in YAML files in `forms/`. To create/open/close/archive a hackathon, edit the YAML and push — no admin slash commands needed.
+- YAML-first hackathon lifecycle: metadata (title, status, dates, channel, URL) and form definitions live in YAML files in `hackathons/`. To create/open/close/archive a hackathon, edit the YAML and push — no admin slash commands needed.
 - A JSON schema at `schemas/hackathon-form.schema.json` validates YAML files and provides VS Code IntelliSense
 - DynamoDB single-table design with composite keys (see README.md for schema) — stores only sites, organisers, and registrations (not hackathon metadata)
 - Two-tier permissions: `@core-team` Slack user group = global admin, site organisers = scoped to their hackathon site
@@ -72,7 +72,7 @@ mypy src/
 - `src/nf_core_bot/db/registrations.py` — Registration CRUD with GSI1 support
 - `src/nf_core_bot/db/sites.py` — Site and organiser CRUD
 - `src/nf_core_bot/permissions/checks.py` — Core-team cache + organiser checks
-- `forms/` — YAML form definitions, one per hackathon
+- `hackathons/` — YAML form definitions, one per hackathon
 - `schemas/` — JSON Schema for YAML validation
 - `infra/` — CloudFormation templates for AWS deployment
 
@@ -81,7 +81,7 @@ mypy src/
 - Use `ruff` for linting and formatting
 - Type hints throughout (enforce with mypy)
 - Async where Bolt supports it (Bolt's async adapter)
-- Keep command handlers thin — business logic in db/ and forms/ modules
+- Keep command handlers thin — business logic in db/ and hackathons/ modules
 - Tests use moto for DynamoDB mocking and Slack's test fixtures
 
 ## DynamoDB Key Patterns

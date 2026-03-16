@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir .
 
 # Copy application code
 COPY src/ src/
-COPY forms/ forms/
+COPY hackathons/ hackathons/
 
 # Re-install in editable mode so the package resolves properly
 RUN pip install --no-cache-dir -e .

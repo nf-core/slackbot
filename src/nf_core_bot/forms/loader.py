@@ -1,6 +1,6 @@
-"""Load and validate YAML form definitions from the forms/ directory.
+"""Load and validate YAML form definitions from the hackathons/ directory.
 
-Each hackathon has a YAML file in ``forms/`` that declares a multi-step
+Each hackathon has a YAML file in ``hackathons/`` that declares a multi-step
 registration form.  This module parses that YAML into typed dataclasses and
 provides helpers for conditional step evaluation.
 """
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ── Project root — resolved relative to this file ───────────────────
 
-_FORMS_DIR = Path(__file__).resolve().parents[3] / "forms"
+_FORMS_DIR = Path(__file__).resolve().parents[3] / "hackathons"
 
 # ── Countries (ISO 3166-1 alpha-2 codes) ────────────────────────────
 
@@ -379,9 +379,9 @@ def load_form(yaml_path: str | Path) -> FormDefinition:
 def load_form_by_hackathon(hackathon_id: str) -> FormDefinition:
     """Find and load the form YAML for *hackathon_id*.
 
-    Searches the project-level ``forms/`` directory for a file whose
+    Searches the project-level ``hackathons/`` directory for a file whose
     ``hackathon`` key matches *hackathon_id*.  Also tries
-    ``forms/{hackathon_id}.yaml`` as a fast-path.
+    ``hackathons/{hackathon_id}.yaml`` as a fast-path.
 
     Raises :class:`FileNotFoundError` if no matching form is found.
     """
@@ -452,7 +452,7 @@ def _form_to_dict(form: FormDefinition) -> dict[str, str]:
 
 
 def list_all_forms() -> list[dict[str, str]]:
-    """Scan the forms/ directory and return metadata for all hackathon forms.
+    """Scan the hackathons/ directory and return metadata for all hackathon forms.
 
     Returns a list of dicts sorted by date_start descending (most recent first).
     Silently skips YAML files that fail to parse (logs a warning).

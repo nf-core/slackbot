@@ -46,7 +46,7 @@ Slack ←→ ECS Fargate (Bolt app, Python)
           GitHub API (org membership checks + invitations)
 ```
 
-Hackathon lifecycle (creation, status changes, form definitions) is managed entirely through YAML files in the `forms/` directory. Creating or updating a hackathon means editing a YAML file and pushing to `main` — the bot auto-deploys and picks up the changes. DynamoDB is used only for runtime data: sites, organisers, and registrations.
+Hackathon lifecycle (creation, status changes, form definitions) is managed entirely through YAML files in the `hackathons/` directory. Creating or updating a hackathon means editing a YAML file and pushing to `main` — the bot auto-deploys and picks up the changes. DynamoDB is used only for runtime data: sites, organisers, and registrations.
 
 ### AWS Services
 
@@ -110,7 +110,7 @@ See [docs/commands.md](docs/commands.md) for full command reference with example
 
 **Notes:**
 
-- Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/` — not via slash commands
+- Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `hackathons/` — not via slash commands
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
 - All responses are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
 - Exception: `github add-member` posts **visible thread replies** so the original requester can see the outcome
@@ -121,10 +121,10 @@ See [docs/commands.md](docs/commands.md) for full command reference with example
 
 Forms are defined in YAML, one per hackathon. Each file contains both the hackathon metadata (title, status, dates, etc.) and the form step definitions. A JSON schema at `schemas/hackathon-form.schema.json` validates the YAML and provides VS Code IntelliSense via the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
 
-See `forms/2026-march.yaml` for a full example. Abbreviated structure:
+See `hackathons/2026-march.yaml` for a full example. Abbreviated structure:
 
 ```yaml
-# forms/2026-march.yaml
+# hackathons/2026-march.yaml
 # yaml-language-server: $schema=../schemas/hackathon-form.schema.json
 hackathon: 2026-march
 title: "nf-core Hackathon — March 2026"
@@ -206,7 +206,7 @@ steps:
 
 | Field | Description |
 |-------|-------------|
-| `hackathon` | Unique identifier (e.g. `2026-march`). Must match the filename: `forms/<id>.yaml` |
+| `hackathon` | Unique identifier (e.g. `2026-march`). Must match the filename: `hackathons/<id>.yaml` |
 | `title` | Display title shown in modals and listings |
 | `status` | One of `draft`, `open`, `closed`, `archived` |
 | `channel` | Slack channel URL (`https://nfcore.slack.com/archives/C...`) or raw channel ID (`C...`). To get the URL: right-click the channel in Slack > "Copy" > "Copy link" |
@@ -275,7 +275,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
 
 Hackathon lifecycle is managed entirely through YAML files — no slash commands needed for creation or status changes.
 
-1. **Create the YAML file** — copy an existing form in `forms/` or start from the JSON schema. Set `status: draft`.
+1. **Create the YAML file** — copy an existing form in `hackathons/` or start from the JSON schema. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new file.
 3. **Preview the form** — `/hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
 4. **Add sites** — `/hackathon admin add-site` (opens a modal form to add sites with organisers)
@@ -297,7 +297,7 @@ nf-core-bot/
 │   ├── slack-app-setup.md       # Creating the Slack app
 │   ├── commands.md              # Full command reference
 │   └── deployment.md            # AWS ECS Fargate deployment
-├── forms/
+├── hackathons/
 │   └── 2026-march.yaml          # Form definitions (one per hackathon)
 ├── schemas/
 │   └── hackathon-form.schema.json # JSON Schema for YAML validation + IntelliSense
@@ -321,7 +321,7 @@ nf-core-bot/
 │       │   │   └── add_member_shortcut.py # Message shortcut: invite message author
 │       │   └── community/       # Future: audit commands
 │       │       └── __init__.py
-│       ├── forms/
+│       ├── hackathons/
 │       │   ├── __init__.py
 │       │   ├── loader.py        # YAML form parser, metadata functions, validation
 │       │   ├── builder.py       # Block Kit modal view generator

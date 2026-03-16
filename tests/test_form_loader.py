@@ -19,7 +19,7 @@ from nf_core_bot.forms.loader import (
 )
 
 # Resolve the actual 2026-march.yaml file relative to the project root.
-_FORMS_DIR = Path(__file__).resolve().parents[1] / "forms"
+_FORMS_DIR = Path(__file__).resolve().parents[1] / "hackathons"
 _MARCH_YAML = _FORMS_DIR / "2026-march.yaml"
 
 
