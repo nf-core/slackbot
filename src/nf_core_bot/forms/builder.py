@@ -106,6 +106,36 @@ def _build_static_select_element(
     return element
 
 
+def _build_external_select_element(
+    field: FormField,
+    initial_value: str | None = None,
+) -> dict[str, Any]:
+    """Build an ``external_select`` element (type-ahead search).
+
+    Options are loaded dynamically via a ``block_suggestion`` handler
+    registered in ``app.py``.  The ``action_id`` is used to identify
+    which option source to query.
+    """
+    element: dict[str, Any] = {
+        "type": "external_select",
+        "action_id": field.id,
+        "placeholder": {"type": "plain_text", "text": "Start typing to search…"},
+        "min_query_length": 1,
+    }
+    if initial_value:
+        # Reconstruct the initial_option from the value.
+        # For countries, the label is the titlecased value.
+        from nf_core_bot.forms.loader import COUNTRIES
+
+        label = initial_value
+        for c in COUNTRIES:
+            if c["value"] == initial_value:
+                label = c["label"]
+                break
+        element["initial_option"] = _build_option(label, initial_value)
+    return element
+
+
 def _build_checkboxes_element(
     field: FormField,
     initial_values: list[str] | None = None,
@@ -142,6 +172,11 @@ def _build_input_block(
         element = _build_static_select_element(
             field,
             sites=sites,
+            initial_value=existing if isinstance(existing, str) else None,
+        )
+    elif field.type == "external_select":
+        element = _build_external_select_element(
+            field,
             initial_value=existing if isinstance(existing, str) else None,
         )
     elif field.type == "checkboxes":
@@ -236,7 +271,16 @@ async def build_modal_view(
     if step.step_type == "statement":
         blocks = _build_statement_blocks(step)
     else:
-        blocks = [_build_input_block(f, sites=sites, answers=answers) for f in step.fields]
+        blocks = []
+        # Render preamble text (e.g. welcome message) before input fields.
+        if step.text:
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": step.text},
+                }
+            )
+        blocks.extend(_build_input_block(f, sites=sites, answers=answers) for f in step.fields)
 
     # ── Private metadata ────────────────────────────────────────────
     meta_dict: dict[str, Any] = {

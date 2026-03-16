@@ -11,13 +11,21 @@ date_end: "2026-03-13"
 steps:
   - id: welcome
     title: "nf-core Hackathon — March 2026"
-    type: statement
     text: |
       Please note that the hackathon is not a training event.
       Beginners are welcome but you'll be expected to just get stuck in!
 
       By registering you are agreeing to abide by our Code of Conduct:
       https://nf-co.re/code_of_conduct
+    fields:
+      - id: code_of_conduct
+        type: checkboxes
+        label: "Code of Conduct"
+        required: true
+        options:
+          - label: "I have read and agree to the nf-core Code of Conduct"
+            value: accepted
+            description: "https://nf-co.re/code_of_conduct"
 
   - id: about_you
     title: "About You"
@@ -32,17 +40,6 @@ steps:
         label: "What is your last name(s)?"
         required: true
 
-      - id: email
-        type: text
-        label: "What is your email address?"
-        required: true
-
-      - id: slack_display_name
-        type: text
-        label: "What is your nf-core Slack display name?"
-        required: false
-        # Note: in Slack bot context, we auto-fill this from the caller's profile
-
       - id: job_title
         type: text
         label: "What is your job/role title?"
@@ -54,11 +51,11 @@ steps:
         required: true
 
       - id: country
-        type: static_select
+        type: external_select
         label: "Which country do you currently live?"
         required: true
         options_from: countries
-        # Dynamic: populated from a countries list (or hardcoded long list)
+        # Dynamic: type-ahead search from full countries list (197 entries)
 
   - id: community_demographics
     title: "Help Us Understand the nf-core Community"
@@ -83,6 +80,7 @@ steps:
         options:
           - { label: "Male", value: male }
           - { label: "Female", value: female }
+          - { label: "Non-binary / Other", value: non_binary_other }
           - { label: "Prefer not to say", value: prefer_not_to_say }
 
       - id: role
@@ -95,6 +93,7 @@ steps:
           - { label: "Research Software Engineer", value: rse }
           - { label: "Principal Investigator / Manager", value: pi_manager }
           - { label: "HPC or System Administrator", value: hpc_sysadmin }
+          - { label: "Other", value: other }
           - { label: "Prefer not to say", value: prefer_not_to_say }
 
       - id: organization_type
@@ -108,6 +107,7 @@ steps:
           - { label: "Biotech startup", value: biotech }
           - { label: "Pharma organization", value: pharma }
           - { label: "Healthcare/Clinical/Diagnostics", value: healthcare }
+          - { label: "Other", value: other }
           - { label: "Prefer not to say", value: prefer_not_to_say }
 
   - id: hackathon_experience
@@ -192,12 +192,3 @@ steps:
         label: "Do you have any additional comments?"
         required: false
         multiline: true
-
-      - id: code_of_conduct
-        type: checkboxes
-        label: "Code of Conduct"
-        required: true
-        options:
-          - label: "I have read and agree to the nf-core Code of Conduct"
-            value: accepted
-            description: "https://nf-co.re/code_of_conduct"

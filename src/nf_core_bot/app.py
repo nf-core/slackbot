@@ -18,7 +18,10 @@ from nf_core_bot import config
 from nf_core_bot.commands.github.add_member_shortcut import handle_add_member_shortcut
 from nf_core_bot.commands.router import dispatch
 from nf_core_bot.db import client as db_client
-from nf_core_bot.forms.handler import handle_registration_step
+from nf_core_bot.forms.handler import (
+    handle_country_suggestions,
+    handle_registration_step,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +56,18 @@ async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-
 async def on_registration_step(ack, body, client, view):  # type: ignore[no-untyped-def]
     """Handle every step of the multi-step registration modal."""
     await handle_registration_step(ack, body, client, view)
+
+
+# ── External-select option providers ─────────────────────────────────
+
+# The ``country`` field uses ``external_select`` so all 197 countries are
+# searchable via type-ahead rather than being truncated at 100.
+
+
+@app.options("country")
+async def on_country_suggestions(ack, body):  # type: ignore[no-untyped-def]
+    """Provide type-ahead search results for the country field."""
+    await handle_country_suggestions(ack, body)
 
 
 # ── Message shortcut ────────────────────────────────────────────────

@@ -104,7 +104,7 @@
       }
     },
     "formStep": {
-      "description": "A form step that collects user input through one or more fields.",
+      "description": "A form step that collects user input through one or more fields. May optionally include preamble text displayed above the fields.",
       "type": "object",
       "required": ["id", "title", "fields"],
       "additionalProperties": false,
@@ -116,6 +116,10 @@
         "title": {
           "type": "string",
           "description": "Title displayed at the top of the Slack modal for this step."
+        },
+        "text": {
+          "type": "string",
+          "description": "Optional preamble text displayed above the input fields. Supports Slack mrkdwn syntax."
         },
         "condition": {
           "$ref": "#/$defs/condition"
@@ -159,8 +163,8 @@
             },
             "type": {
               "type": "string",
-              "description": "The input type for this field.\n\n- text: single or multi-line text input\n- static_select: dropdown menu with predefined options\n- checkboxes: one or more checkboxes the user can toggle",
-              "enum": ["text", "static_select", "checkboxes"]
+              "description": "The input type for this field.\n\n- text: single or multi-line text input\n- static_select: dropdown menu with predefined options (max 100)\n- external_select: dropdown with type-ahead search, options loaded dynamically (no limit)\n- checkboxes: one or more checkboxes the user can toggle",
+              "enum": ["text", "static_select", "external_select", "checkboxes"]
             },
             "label": {
               "type": "string",
@@ -232,6 +236,27 @@
                 "additionalProperties": false
               }
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "external_select" } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "required": true,
+              "options_from": {
+                "type": "string",
+                "description": "Dynamic option source for type-ahead search. Options are populated at runtime.\n\n- countries: ISO 3166-1 country list (197 entries, searchable)",
+                "enum": ["countries"]
+              }
+            },
+            "required": ["options_from"],
+            "additionalProperties": false
           }
         },
         {

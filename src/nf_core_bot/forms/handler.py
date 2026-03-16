@@ -18,7 +18,7 @@ from nf_core_bot.checks.slack_profile import get_github_username
 from nf_core_bot.db import registrations
 from nf_core_bot.db import sites as sites_db
 from nf_core_bot.forms.builder import build_modal_view
-from nf_core_bot.forms.loader import get_applicable_steps, load_form_by_hackathon
+from nf_core_bot.forms.loader import COUNTRIES, get_applicable_steps, load_form_by_hackathon
 
 if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient
@@ -49,7 +49,7 @@ def _extract_values(state_values: dict[str, dict[str, Any]]) -> dict[str, Any]:
             if action_type == "plain_text_input":
                 extracted[block_id] = payload.get("value") or ""
 
-            elif action_type == "static_select":
+            elif action_type in ("static_select", "external_select"):
                 selected = payload.get("selected_option")
                 extracted[block_id] = selected["value"] if selected else None
 
@@ -67,6 +67,27 @@ def _extract_values(state_values: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 extracted[block_id] = payload.get("value")
 
     return extracted
+
+
+# ── External-select suggestions ─────────────────────────────────────
+
+
+async def handle_country_suggestions(ack: Any, body: dict[str, Any]) -> None:
+    """Respond to ``block_suggestion`` events for the country field.
+
+    Filters the full COUNTRIES list based on the user's type-ahead query
+    and returns up to 100 matching options.
+    """
+    query = (body.get("value") or "").lower()
+
+    matches = [
+        {"text": {"type": "plain_text", "text": c["label"]}, "value": c["value"]}
+        for c in COUNTRIES
+        if query in c["label"].lower()
+    ]
+
+    # Slack allows max 100 options in a suggestion response.
+    await ack(options=matches[:100])
 
 
 # ── Profile data helper ─────────────────────────────────────────────
@@ -210,11 +231,19 @@ async def handle_registration_step(
         # Final step — close the modal.
         await ack(response_action="clear")
         if preview:
-            # Preview mode — no persistence, just notify the admin.
+            # Preview mode — no persistence, show collected answers.
             try:
+                lines = [":eyes: *Preview complete* — no registration was saved.\n"]
+                lines.append("*Submitted answers:*")
+                for key, value in sorted(answers.items()):
+                    if isinstance(value, list):
+                        display = ", ".join(str(v) for v in value)
+                    else:
+                        display = str(value) if value else "_(empty)_"
+                    lines.append(f"• *{key}*: {display}")
                 await client.chat_postMessage(
                     channel=user_id,
-                    text=":eyes: *Preview complete* — no registration was saved.",
+                    text="\n".join(lines),
                 )
             except Exception:
                 logger.exception("Failed to send preview confirmation to user %s.", user_id)

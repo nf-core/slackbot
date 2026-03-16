@@ -50,13 +50,16 @@ def test_load_form_step_ids() -> None:
     ]
 
 
-def test_load_form_statement_step() -> None:
+def test_load_form_welcome_step() -> None:
     form = load_form(_MARCH_YAML)
     welcome = form.steps[0]
-    assert welcome.step_type == "statement"
+    assert welcome.step_type == "form"
     assert welcome.text is not None
     assert "Code of Conduct" in welcome.text
-    assert welcome.fields == []
+    # Welcome step now includes the CoC checkbox field.
+    assert len(welcome.fields) == 1
+    assert welcome.fields[0].id == "code_of_conduct"
+    assert welcome.fields[0].type == "checkboxes"
 
 
 def test_load_form_field_types() -> None:
@@ -66,16 +69,18 @@ def test_load_form_field_types() -> None:
 
     field_types = {f.id: f.type for f in about.fields}
     assert field_types["first_name"] == "text"
-    assert field_types["country"] == "static_select"
+    assert field_types["country"] == "external_select"
 
 
 def test_load_form_field_required() -> None:
     form = load_form(_MARCH_YAML)
     about = form.steps[1]
     first_name = next(f for f in about.fields if f.id == "first_name")
-    slack_display = next(f for f in about.fields if f.id == "slack_display_name")
     assert first_name.required is True
-    assert slack_display.required is False
+    # 'comments' in the additional step is optional.
+    additional = next(s for s in form.steps if s.id == "additional")
+    comments = next(f for f in additional.fields if f.id == "comments")
+    assert comments.required is False
 
 
 def test_load_form_field_options() -> None:
@@ -107,8 +112,8 @@ def test_load_form_conditions() -> None:
 
 def test_load_form_checkboxes_field() -> None:
     form = load_form(_MARCH_YAML)
-    additional = form.steps[-1]  # additional
-    coc = next(f for f in additional.fields if f.id == "code_of_conduct")
+    welcome = form.steps[0]  # welcome — CoC checkbox moved here
+    coc = next(f for f in welcome.fields if f.id == "code_of_conduct")
     assert coc.type == "checkboxes"
     assert coc.required is True
     assert coc.options is not None
