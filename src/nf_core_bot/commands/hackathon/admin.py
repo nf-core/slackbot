@@ -34,7 +34,7 @@ from nf_core_bot.db.sites import (
     remove_site,
     update_site,
 )
-from nf_core_bot.forms.loader import get_active_form, get_form_metadata, list_all_forms
+from nf_core_bot.forms.loader import get_active_form, get_form_metadata, list_all_forms, load_form_by_hackathon
 from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site
 
 if TYPE_CHECKING:
@@ -734,18 +734,31 @@ async def handle_export(
         return
 
     # ── Build CSV ───────────────────────────────────────────────────
-    # Collect all unique form_data keys across registrations.
-    all_form_keys: list[str] = []
-    seen_keys: set[str] = set()
-    for reg in registrations:
-        for key in reg.get("form_data", {}):
-            if key not in seen_keys:
-                all_form_keys.append(key)
-                seen_keys.add(key)
+    # Walk the form definition to get field IDs in form order and
+    # build a value→label lookup for select/radio fields.
+    form_def = load_form_by_hackathon(hackathon_id)
+    form_field_ids: list[str] = []
+    value_labels: dict[str, dict[str, str]] = {}  # field_id → {value: label}
+    for step in form_def.steps:
+        for field in step.fields:
+            form_field_ids.append(field.id)
+            if field.options:
+                value_labels[field.id] = {str(opt["value"]): str(opt["label"]) for opt in field.options}
+
+    def _resolve(field_id: str, raw: object) -> str:
+        """Translate a stored value to its human-readable label."""
+        labels = value_labels.get(field_id)
+        if labels is None:
+            return _csv_value(raw)
+        if isinstance(raw, list):
+            return ", ".join(str(labels.get(v, v)) for v in raw)
+        if isinstance(raw, str):
+            return labels.get(raw, raw)
+        return _csv_value(raw)
 
     profile_cols = ["email", "slack_display_name", "github_username"]
     meta_cols = ["site_id", "registered_at"]
-    header = profile_cols + all_form_keys + meta_cols
+    header = profile_cols + form_field_ids + meta_cols
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -756,7 +769,7 @@ async def handle_export(
         form = reg.get("form_data", {})
         row = (
             [profile.get(c, "") for c in profile_cols]
-            + [_csv_value(form.get(k, "")) for k in all_form_keys]
+            + [_resolve(k, form.get(k, "")) for k in form_field_ids]
             + [reg.get("site_id", ""), reg.get("registered_at", "")]
         )
         writer.writerow(row)
