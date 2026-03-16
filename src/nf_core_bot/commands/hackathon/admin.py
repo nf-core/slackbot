@@ -764,23 +764,18 @@ async def handle_export(
     csv_content = buf.getvalue()
 
     # ── Upload CSV as file via DM ───────────────────────────────────
-    try:
-        # Open (or retrieve) a DM conversation with the user first —
-        # files_upload_v2 needs a real channel ID, not a user ID.
-        dm = await client.conversations_open(users=[user_id])
-        dm_channel = dm["channel"]["id"]
+    # Open (or retrieve) a DM conversation with the user first —
+    # files_upload_v2 needs a real channel ID, not a user ID.
+    dm = await client.conversations_open(users=[user_id])
+    dm_channel = dm["channel"]["id"]
 
-        await client.files_upload_v2(
-            channel=dm_channel,
-            content=csv_content,
-            filename=f"{hackathon_id}-registrations.csv",
-            title=f"Registrations for {hackathon['title']}",
-            initial_comment=f"Export of {len(registrations)} registration(s).",
-        )
-    except Exception:
-        logger.exception("Failed to upload CSV export for user %s.", user_id)
-        await respond(text="Failed to upload CSV. Please try again.", response_type="ephemeral")
-        return
+    await client.files_upload_v2(
+        channel=dm_channel,
+        content=csv_content,
+        filename=f"{hackathon_id}-registrations.csv",
+        title=f"Registrations for {hackathon['title']}",
+        initial_comment=f"Export of {len(registrations)} registration(s).",
+    )
 
     await respond(
         text=f"Exported {len(registrations)} registration(s) — check your DMs.",
