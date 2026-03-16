@@ -50,19 +50,19 @@ class TestAdminDispatchTypes:
         assert isinstance(args[4], list)  # args is a list
         assert args[4] == ["2026-march"]
 
-    async def test_admin_add_site_receives_ack_respond_args_list(self, monkeypatch):
+    async def test_admin_add_site_receives_ack_respond_client_body_args(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "add-site", mock)
         await dispatch(
             AsyncMock(),
             AsyncMock(),
             AsyncMock(),
-            _command("hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain"),
+            _command("hackathon admin add-site 2026-march"),
         )
         mock.assert_awaited_once()
         args = mock.call_args[0]
-        assert len(args) == 3  # ack, respond, args_list
-        assert isinstance(args[2], list)  # args is a list
+        assert len(args) == 5  # ack, respond, client, body, args_list
+        assert isinstance(args[4], list)  # args is a list
 
     async def test_admin_remove_site_receives_args_list(self, monkeypatch):
         mock = AsyncMock()
@@ -129,14 +129,13 @@ class TestAdminDispatchArgValues:
         args = mock.call_args[0]
         assert args[4] == ["2026-march"]
 
-    async def test_add_site_all_tokens_passed(self, monkeypatch):
+    async def test_add_site_body_contains_trigger_id(self, monkeypatch):
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "add-site", mock)
-        await dispatch(
-            AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin add-site h1 site1 Name | City | Country")
-        )
-        args = mock.call_args[0]
-        assert args[2] == ["h1", "site1", "Name", "|", "City", "|", "Country"]
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin add-site"))
+        body = mock.call_args[0][3]
+        assert "trigger_id" in body
+        assert "user_id" in body
 
     async def test_body_contains_trigger_id_and_user_id(self, monkeypatch):
         mock = AsyncMock()

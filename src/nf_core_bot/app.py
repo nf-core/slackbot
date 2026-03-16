@@ -16,6 +16,7 @@ from slack_bolt.app.async_app import AsyncApp
 
 from nf_core_bot import config
 from nf_core_bot.commands.github.add_member_shortcut import handle_add_member_shortcut
+from nf_core_bot.commands.hackathon.admin import handle_admin_add_site_submission
 from nf_core_bot.commands.router import dispatch
 from nf_core_bot.db import client as db_client
 from nf_core_bot.forms.handler import (
@@ -56,6 +57,15 @@ async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-
 async def on_registration_step(ack, body, client, view):  # type: ignore[no-untyped-def]
     """Handle every step of the multi-step registration modal."""
     await handle_registration_step(ack, body, client, view)
+
+
+# ── Admin modal callbacks ────────────────────────────────────────────
+
+
+@app.view("admin_add_site")
+async def on_admin_add_site(ack, body, client):  # type: ignore[no-untyped-def]
+    """Handle the add-site modal submission."""
+    await handle_admin_add_site_submission(ack, body, client)
 
 
 # ── External-select option providers ─────────────────────────────────

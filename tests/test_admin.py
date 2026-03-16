@@ -10,6 +10,7 @@ from nf_core_bot.commands.hackathon.admin import (
     _resolve_hackathon_id,
     handle_admin_add_organiser,
     handle_admin_add_site,
+    handle_admin_add_site_submission,
     handle_admin_list,
     handle_admin_list_sites,
     handle_admin_preview,
@@ -241,92 +242,118 @@ class TestAdminPreview:
 
 
 class TestAdminAddSite:
-    @pytest.mark.usefixtures("_patch_known_hackathon")
-    async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test the add-site modal flow (open + submission)."""
+
+    async def test_opens_modal(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.add_site",
-            AsyncMock(),
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [{"hackathon_id": "h1", "title": "Test Hack"}],
         )
-
-        await handle_admin_add_site(
-            ack, respond, ["h1", "stockholm-uni", "Stockholm", "University", "|", "Stockholm", "|", "Sweden"]
-        )
-
-        ack.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "stockholm-uni" in text
-        assert "Sweden" in text
-
-    async def test_success_without_hackathon_id(
-        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Omit hackathon-id — should default to active hackathon."""
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.get_active_form",
-            lambda: {"hackathon_id": "active-hack"},
+            lambda: {"hackathon_id": "h1"},
         )
-        # get_form_metadata: recognise "active-hack" but not "stockholm-uni"
+        client = AsyncMock()
+        body: dict[str, str] = {"trigger_id": "T123"}
+
+        await handle_admin_add_site(ack, respond, client, body, [])
+
+        ack.assert_awaited_once()
+        client.views_open.assert_awaited_once()
+        view = client.views_open.call_args.kwargs["view"]
+        assert view["callback_id"] == "admin_add_site"
+
+    async def test_no_forms_found(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
-            lambda hid: {"hackathon_id": hid, "title": "Active"} if hid == "active-hack" else None,
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [],
         )
+        client = AsyncMock()
+        body: dict[str, str] = {"trigger_id": "T123"}
+
+        await handle_admin_add_site(ack, respond, client, body, [])
+
+        ack.assert_awaited_once()
+        assert "No hackathon forms found" in respond.call_args.kwargs["text"]
+
+    async def test_submission_success(self, ack: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.add_site",
             AsyncMock(),
         )
+        client = AsyncMock()
+        body = {
+            "user": {"id": "U123"},
+            "view": {
+                "state": {
+                    "values": {
+                        "hackathon": {"hackathon": {"selected_option": {"value": "h1"}}},
+                        "site_id": {"site_id": {"value": "stockholm-uni"}},
+                        "name": {"name": {"value": "Stockholm University"}},
+                        "city": {"city": {"value": "Stockholm"}},
+                        "country": {"country": {"selected_option": {"value": "sweden"}}},
+                    }
+                }
+            },
+        }
 
-        await handle_admin_add_site(
-            ack, respond, ["stockholm-uni", "Stockholm", "University", "|", "Stockholm", "|", "Sweden"]
-        )
+        await handle_admin_add_site_submission(ack, body, client)
 
         ack.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
+        client.chat_postMessage.assert_awaited_once()
+        text = client.chat_postMessage.call_args.kwargs["text"]
         assert "stockholm-uni" in text
-        assert "active-hack" in text
+        assert "h1" in text
 
-    @pytest.mark.usefixtures("_patch_known_hackathon")
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_add_site(ack, respond, ["h1", "site-id"])
+    async def test_submission_bad_site_id(self, ack: AsyncMock) -> None:
+        client = AsyncMock()
+        body = {
+            "user": {"id": "U123"},
+            "view": {
+                "state": {
+                    "values": {
+                        "hackathon": {"hackathon": {"selected_option": {"value": "h1"}}},
+                        "site_id": {"site_id": {"value": "Bad Site!"}},
+                        "name": {"name": {"value": "Test"}},
+                        "city": {"city": {"value": "City"}},
+                        "country": {"country": {"selected_option": {"value": "sweden"}}},
+                    }
+                }
+            },
+        }
 
+        await handle_admin_add_site_submission(ack, body, client)
+
+        # Should return validation errors, not ack normally.
         ack.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
+        assert ack.call_args.kwargs.get("response_action") == "errors"
 
-    @pytest.mark.usefixtures("_patch_known_hackathon")
-    async def test_duplicate_site(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_submission_duplicate_site(self, ack: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.add_site",
             AsyncMock(side_effect=ValueError("already exists")),
         )
+        client = AsyncMock()
+        body = {
+            "user": {"id": "U123"},
+            "view": {
+                "state": {
+                    "values": {
+                        "hackathon": {"hackathon": {"selected_option": {"value": "h1"}}},
+                        "site_id": {"site_id": {"value": "dup"}},
+                        "name": {"name": {"value": "Dup Site"}},
+                        "city": {"city": {"value": "City"}},
+                        "country": {"country": {"selected_option": {"value": "sweden"}}},
+                    }
+                }
+            },
+        }
 
-        await handle_admin_add_site(ack, respond, ["h1", "dup", "Name", "|", "City", "|", "Country"])
-
-        ack.assert_awaited_once()
-        assert "already exists" in respond.call_args.kwargs["text"]
-
-    @pytest.mark.usefixtures("_patch_known_hackathon")
-    async def test_bad_pipe_format(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        # Missing pipe separators — only two parts instead of three
-        await handle_admin_add_site(ack, respond, ["h1", "site-id", "Name", "|", "City"])
-
-        ack.assert_awaited_once()
-        assert "pipe-delimited" in respond.call_args.kwargs["text"]
-
-    async def test_hackathon_not_found(
-        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
-            lambda hid: None,
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_active_form",
-            lambda: None,
-        )
-
-        await handle_admin_add_site(ack, respond, ["h1", "site-id", "Name", "|", "City", "|", "Country"])
+        await handle_admin_add_site_submission(ack, body, client)
 
         ack.assert_awaited_once()
-        assert "No active hackathon" in respond.call_args.kwargs["text"]
+        text = client.chat_postMessage.call_args.kwargs["text"]
+        assert "already exists" in text
 
 
 # ── handle_admin_remove_site ─────────────────────────────────────────

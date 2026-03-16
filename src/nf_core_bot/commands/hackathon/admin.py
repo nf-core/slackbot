@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nf_core_bot.db.sites import (
     add_organiser,
@@ -140,72 +140,161 @@ async def handle_admin_preview(
 # ── Site management ──────────────────────────────────────────────────
 
 
-async def handle_admin_add_site(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """Add a site to a hackathon.
+async def handle_admin_add_site(
+    ack: Ack, respond: Respond, client: AsyncWebClient, body: dict[str, str], args: list[str]
+) -> None:
+    """Open a modal form to add a site to a hackathon.
 
-    Usage: ``/nf-core-bot hackathon admin add-site [hackathon-id] <site-id> <name> | <city> | <country>``
+    Usage: ``/nf-core-bot hackathon admin add-site``
 
-    Defaults to the active hackathon when *hackathon-id* is omitted.
-    The first remaining token after the hackathon ID is the site ID.
-    The rest is pipe-delimited: ``name | city | country``.
+    The modal includes a hackathon dropdown so no arguments are needed.
     """
     await ack()
 
-    hackathon_id, remaining = _resolve_hackathon_id(args)
-    if hackathon_id is None:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin add-site [hackathon-id] <site-id> <name> | <city> | <country>`\n"
-            f"{_NO_ACTIVE_MSG}",
-            response_type="ephemeral",
+    all_forms = list_all_forms()
+    if not all_forms:
+        await respond(text="No hackathon forms found.", response_type="ephemeral")
+        return
+
+    trigger_id = body.get("trigger_id", "")
+    active_form = get_active_form()
+    active_id = active_form["hackathon_id"] if active_form else None
+    view = _build_add_site_modal(all_forms, active_id)
+
+    try:
+        await client.views_open(trigger_id=trigger_id, view=view)
+    except Exception:
+        logger.exception("Failed to open add-site modal")
+        await respond(text="Failed to open add-site modal.", response_type="ephemeral")
+
+
+def _build_add_site_modal(forms: list[dict[str, Any]], active_hackathon_id: str | None = None) -> dict[str, Any]:
+    """Build the Block Kit modal view for adding a site."""
+    hackathon_options = [
+        {
+            "text": {"type": "plain_text", "text": f"{f['title']} ({f['hackathon_id']})"},
+            "value": f["hackathon_id"],
+        }
+        for f in forms
+    ]
+
+    hackathon_block: dict[str, Any] = {
+        "type": "input",
+        "block_id": "hackathon",
+        "label": {"type": "plain_text", "text": "Hackathon"},
+        "element": {
+            "type": "static_select",
+            "action_id": "hackathon",
+            "options": hackathon_options,
+        },
+    }
+    # Pre-select the active hackathon if there is one.
+    if active_hackathon_id:
+        for opt in hackathon_options:
+            if opt["value"] == active_hackathon_id:
+                hackathon_block["element"]["initial_option"] = opt
+                break
+
+    return {
+        "type": "modal",
+        "callback_id": "admin_add_site",
+        "title": {"type": "plain_text", "text": "Add Hackathon Site"},
+        "submit": {"type": "plain_text", "text": "Add Site"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            hackathon_block,
+            {
+                "type": "input",
+                "block_id": "site_id",
+                "label": {"type": "plain_text", "text": "Site ID"},
+                "hint": {
+                    "type": "plain_text",
+                    "text": "Short lowercase identifier, e.g. 'stockholm-uni'. No spaces.",
+                },
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "site_id",
+                    "placeholder": {"type": "plain_text", "text": "e.g. stockholm-uni"},
+                },
+            },
+            {
+                "type": "input",
+                "block_id": "name",
+                "label": {"type": "plain_text", "text": "Site Name"},
+                "hint": {
+                    "type": "plain_text",
+                    "text": "Full display name shown in the registration form.",
+                },
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "name",
+                    "placeholder": {"type": "plain_text", "text": "e.g. Stockholm University"},
+                },
+            },
+            {
+                "type": "input",
+                "block_id": "city",
+                "label": {"type": "plain_text", "text": "City"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "city",
+                    "placeholder": {"type": "plain_text", "text": "e.g. Stockholm"},
+                },
+            },
+            {
+                "type": "input",
+                "block_id": "country",
+                "label": {"type": "plain_text", "text": "Country"},
+                "element": {
+                    "type": "external_select",
+                    "action_id": "country",
+                    "placeholder": {"type": "plain_text", "text": "Start typing to search..."},
+                    "min_query_length": 1,
+                },
+            },
+        ],
+    }
+
+
+async def handle_admin_add_site_submission(ack: Any, body: dict[str, Any], client: AsyncWebClient) -> None:
+    """Handle the add-site modal submission."""
+    values = body["view"]["state"]["values"]
+    user_id: str = body["user"]["id"]
+
+    hackathon_opt = values["hackathon"]["hackathon"].get("selected_option")
+    hackathon_id = hackathon_opt["value"] if hackathon_opt else ""
+    site_id = values["site_id"]["site_id"]["value"].strip().lower()
+    name = values["name"]["name"]["value"].strip()
+    city = values["city"]["city"]["value"].strip()
+    country_opt = values["country"]["country"].get("selected_option")
+    country = country_opt["value"] if country_opt else ""
+
+    # Validate site_id: lowercase alphanumeric + hyphens only.
+    if not re.match(r"^[a-z0-9][a-z0-9-]*$", site_id):
+        await ack(
+            response_action="errors",
+            errors={"site_id": "Site ID must be lowercase letters, numbers, and hyphens only."},
         )
         return
 
-    if len(remaining) < 2:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin add-site [hackathon-id] <site-id> <name> | <city> | <country>`\n"
-            "Defaults to the active hackathon if omitted.",
-            response_type="ephemeral",
-        )
-        return
-
-    site_id = remaining[0]
-
-    # Rejoin remaining tokens and split on pipe to get name, city, country.
-    remainder = " ".join(remaining[1:])
-    parts = [p.strip() for p in remainder.split("|")]
-    if len(parts) != 3 or not all(parts):
-        await respond(
-            text="Invalid site details. Expected pipe-delimited format: `<name> | <city> | <country>`\n"
-            "Example: `/nf-core-bot hackathon admin add-site stockholm-uni "
-            "Stockholm University | Stockholm | Sweden`",
-            response_type="ephemeral",
-        )
-        return
-
-    name, city, country = parts
-
-    # Verify the hackathon exists.
-    hackathon = get_form_metadata(hackathon_id)
-    if hackathon is None:
-        await respond(
-            text=f"Hackathon `{hackathon_id}` not found.",
-            response_type="ephemeral",
-        )
-        return
+    await ack()
 
     try:
         await add_site(hackathon_id, site_id, name, city, country)
-    except ValueError as exc:
-        await respond(text=f"Error: {exc}", response_type="ephemeral")
+    except ValueError:
+        await client.chat_postMessage(
+            channel=user_id,
+            text=f":warning: Site `{site_id}` already exists in hackathon `{hackathon_id}`.",
+        )
         return
 
-    logger.info("Admin added site '%s' to hackathon '%s'.", site_id, hackathon_id)
-    await respond(
-        text=f"Site `{site_id}` added to hackathon `{hackathon_id}`.\n"
+    logger.info("Admin added site '%s' to hackathon '%s' via modal.", site_id, hackathon_id)
+    await client.chat_postMessage(
+        channel=user_id,
+        text=f":white_check_mark: Site `{site_id}` added to hackathon `{hackathon_id}`.\n"
         f"• *Name:* {name}\n"
         f"• *City:* {city}\n"
         f"• *Country:* {country}",
-        response_type="ephemeral",
     )
 
 

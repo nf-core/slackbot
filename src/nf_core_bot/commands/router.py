@@ -174,7 +174,7 @@ async def _route_admin(
     # Dispatch: handlers have varying signatures.
     if sub == "list":
         await handler(ack, respond)  # type: ignore[operator]
-    elif sub == "preview":
+    elif sub in ("preview", "add-site"):
         await handler(ack, respond, client, body, rest)  # type: ignore[operator]
     else:
         await handler(ack, respond, rest)  # type: ignore[operator]
