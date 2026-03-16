@@ -57,7 +57,6 @@ _ADMIN_DISPATCH: dict[str, object] = {
     "preview": handle_admin_preview,
     "add-site": handle_admin_add_site,
     "remove-site": handle_admin_remove_site,
-    "list-sites": handle_admin_list_sites,
     "add-organiser": handle_admin_add_organiser,
     "remove-organiser": handle_admin_remove_organiser,
 }
