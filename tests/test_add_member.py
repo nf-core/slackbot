@@ -67,7 +67,7 @@ class TestBareUsername:
         respond = AsyncMock()
         client = AsyncMock()
 
-        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["not--valid!!"])
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["I don't know"])
 
         # Should get ephemeral error about invalid username
         respond_calls = respond.call_args_list

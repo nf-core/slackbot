@@ -118,19 +118,19 @@ def normalise_github_username(raw: str) -> str | None:
     - ``@octocat``
     - ``octocat``
     """
-    raw = raw.strip().rstrip("/")
+    raw = raw.strip()
 
-    # URL form
+    # URL form — extract the first path segment before any other cleanup.
     url_match = re.match(r"(?:https?://)?github\.com/([A-Za-z0-9_.-]+)", raw)
     if url_match:
-        raw = url_match.group(1)  # fall through to validation below
+        raw = url_match.group(1)
 
-    # @-prefixed
-    elif raw.startswith("@"):
-        raw = raw[1:]
+    # Strip leading/trailing non-alphanumeric noise (handles @, /, \, ., etc.)
+    raw = re.sub(r"^[^A-Za-z0-9]+", "", raw)
+    raw = re.sub(r"[^A-Za-z0-9]+$", "", raw)
 
-    # Validate: GitHub usernames are alphanumeric + hyphens, 1-39 chars
-    if re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?", raw) and len(raw) <= 39:
+    # Validate: GitHub usernames are alphanumeric + hyphens, 1-39 chars.
+    if raw and re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?", raw) and len(raw) <= 39:
         return raw
 
     return None

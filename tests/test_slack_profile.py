@@ -58,19 +58,83 @@ class TestNormaliseGithubUsername:
     def test_whitespace_stripping(self) -> None:
         assert normalise_github_username("  octocat  ") == "octocat"
 
+    # --- Leading/trailing noise stripping ---
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("@jpaquay", "jpaquay"),  # real-world: @ prefix
+            ("/santiagotariza", "santiagotariza"),  # real-world: leading slash
+            ("\\octocat", "octocat"),  # leading backslash
+            (".octocat", "octocat"),  # leading dot
+            ("//octocat", "octocat"),  # double leading slash
+            ("@/octocat", "octocat"),  # mixed leading noise
+            ("/@octocat", "octocat"),  # mixed leading noise reversed
+            ("@@octocat", "octocat"),  # double @
+            ("octocat.", "octocat"),  # trailing dot
+            ("octocat/", "octocat"),  # trailing slash
+            ("octocat//", "octocat"),  # double trailing slash
+            ("/octocat/", "octocat"),  # both sides
+        ],
+    )
+    def test_leading_trailing_noise(self, raw: str, expected: str) -> None:
+        """Non-alphanumeric characters around the username are stripped."""
+        assert normalise_github_username(raw) == expected
+
+    def test_url_with_trailing_dot(self) -> None:
+        """github.com/octocat. (from sentence punctuation) extracts correctly."""
+        assert normalise_github_username("https://github.com/octocat.") == "octocat"
+
+    # --- Real-world inputs from past requests ---
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("@jpaquay", "jpaquay"),
+            ("https://github.com/atakmty", "atakmty"),
+            ("/santiagotariza", "santiagotariza"),
+        ],
+    )
+    def test_real_world_valid(self, raw: str, expected: str) -> None:
+        """Real inputs that users have submitted — should resolve cleanly."""
+        assert normalise_github_username(raw) == expected
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "I don't know",
+            ".",
+        ],
+    )
+    def test_real_world_invalid(self, raw: str) -> None:
+        """Real inputs that are not valid usernames — should return None."""
+        assert normalise_github_username(raw) is None
+
     # --- Invalid inputs ---
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("-octocat", "octocat"),  # leading hyphen stripped
+            ("octocat-", "octocat"),  # trailing hyphen stripped
+            ("--octocat--", "octocat"),  # both sides stripped
+        ],
+    )
+    def test_hyphen_noise_stripped(self, raw: str, expected: str) -> None:
+        """Leading/trailing hyphens are treated as noise and stripped."""
+        assert normalise_github_username(raw) == expected
 
     @pytest.mark.parametrize(
         "raw",
         [
             "",
             "   ",
-            "-octocat",  # starts with hyphen
-            "octocat-",  # ends with hyphen
+            "-",  # only a hyphen
+            "---",  # only hyphens
             "a" * 40,  # too long
-            "octo_cat",  # underscore
-            "octo.cat",  # dot
-            "octo cat",  # space
+            "octo_cat",  # underscore in middle
+            "octo.cat",  # dot in middle
+            "octo cat",  # space in middle
         ],
     )
     def test_invalid_usernames(self, raw: str) -> None:
