@@ -10,7 +10,10 @@ from nf_core_bot.forms.loader import (
     COUNTRIES,
     FormDefinition,
     FormStep,
+    get_active_form,
     get_applicable_steps,
+    get_form_metadata,
+    list_all_forms,
     load_form,
     load_form_by_hackathon,
 )
@@ -227,3 +230,121 @@ def test_countries_list_has_known_entries() -> None:
     assert "GB" in values
     assert "DE" in values
     assert "SE" in values
+
+
+# ---------------------------------------------------------------------------
+# FormDefinition metadata fields
+# ---------------------------------------------------------------------------
+
+
+class TestFormMetadataFields:
+    """Test the new metadata fields in FormDefinition."""
+
+    def test_form_has_title(self) -> None:
+        form = load_form_by_hackathon("2026-march")
+        assert form.title == "nf-core Hackathon \u2014 March 2026"
+
+    def test_form_has_status(self) -> None:
+        form = load_form_by_hackathon("2026-march")
+        assert form.status == "draft"
+
+    def test_form_has_channel_id(self) -> None:
+        form = load_form_by_hackathon("2026-march")
+        assert form.channel_id == "C0ACF0TPF5E"
+
+    def test_form_has_url(self) -> None:
+        form = load_form_by_hackathon("2026-march")
+        assert form.url == "https://nf-co.re/events/2026/hackathon-march-2026"
+
+    def test_form_has_dates(self) -> None:
+        form = load_form_by_hackathon("2026-march")
+        assert form.date_start == "2026-03-11"
+        assert form.date_end == "2026-03-13"
+
+
+# ---------------------------------------------------------------------------
+# _parse_channel_id
+# ---------------------------------------------------------------------------
+
+
+class TestParseChannelId:
+    """Test _parse_channel_id function."""
+
+    def test_raw_id(self) -> None:
+        from nf_core_bot.forms.loader import _parse_channel_id
+
+        assert _parse_channel_id("C0ACF0TPF5E") == "C0ACF0TPF5E"
+
+    def test_url(self) -> None:
+        from nf_core_bot.forms.loader import _parse_channel_id
+
+        assert _parse_channel_id("https://nfcore.slack.com/archives/C0ACF0TPF5E") == "C0ACF0TPF5E"
+
+    def test_invalid_raises(self) -> None:
+        from nf_core_bot.forms.loader import _parse_channel_id
+
+        with pytest.raises(ValueError):
+            _parse_channel_id("not-a-channel")
+
+
+# ---------------------------------------------------------------------------
+# list_all_forms
+# ---------------------------------------------------------------------------
+
+
+class TestListAllForms:
+    """Test the list_all_forms function."""
+
+    def test_returns_list(self) -> None:
+        forms = list_all_forms()
+        assert isinstance(forms, list)
+        assert len(forms) >= 1
+
+    def test_dict_has_expected_keys(self) -> None:
+        forms = list_all_forms()
+        form = forms[0]
+        assert "hackathon_id" in form
+        assert "title" in form
+        assert "status" in form
+        assert "date_start" in form
+        assert "date_end" in form
+        assert "url" in form
+
+    def test_sorted_by_date_descending(self) -> None:
+        forms = list_all_forms()
+        if len(forms) > 1:
+            dates = [f["date_start"] for f in forms]
+            assert dates == sorted(dates, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# get_active_form
+# ---------------------------------------------------------------------------
+
+
+class TestGetActiveForm:
+    """Test the get_active_form function."""
+
+    def test_returns_none_when_no_open(self) -> None:
+        # The 2026-march form has status "draft", not "open"
+        result = get_active_form()
+        assert result is None  # since we set status to draft in the YAML
+
+
+# ---------------------------------------------------------------------------
+# get_form_metadata
+# ---------------------------------------------------------------------------
+
+
+class TestGetFormMetadata:
+    """Test the get_form_metadata function."""
+
+    def test_returns_dict_for_existing(self) -> None:
+        result = get_form_metadata("2026-march")
+        assert result is not None
+        assert result["hackathon_id"] == "2026-march"
+        assert result["title"] == "nf-core Hackathon \u2014 March 2026"
+
+    def test_returns_none_for_missing(self) -> None:
+        result = get_form_metadata("nonexistent")
+        assert result is None

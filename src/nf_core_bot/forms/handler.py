@@ -124,20 +124,14 @@ async def _join_hackathon_channel(
     hackathon_id: str,
     user_id: str,
 ) -> None:
-    """Invite the user to the hackathon Slack channel if one is configured.
+    """Invite the user to the hackathon Slack channel.
 
-    Looks up the ``channel_id`` from hackathon metadata.  Silently
+    Loads the ``channel_id`` from the form YAML definition.  Silently
     succeeds if the user is already in the channel.
     """
     try:
-        from nf_core_bot.db import hackathons
-
-        hackathon = await hackathons.get_hackathon(hackathon_id)
-        if not hackathon:
-            return
-        channel_id = hackathon.get("channel_id")
-        if not channel_id:
-            return
+        form = load_form_by_hackathon(hackathon_id)
+        channel_id = form.channel_id
 
         await client.conversations_invite(channel=channel_id, users=[user_id])
         logger.info("Invited user %s to channel %s for hackathon '%s'.", user_id, channel_id, hackathon_id)
@@ -178,6 +172,7 @@ async def handle_registration_step(
     hackathon_id: str = metadata.get("hackathon_id", "")
     current_step_index: int = metadata.get("step_index", 0)
     answers: dict[str, Any] = metadata.get("answers", {})
+    preview: bool = metadata.get("preview", False)
 
     # ── Extract & merge new values ──────────────────────────────────
     state_values = view.get("state", {}).get("values", {})
@@ -208,12 +203,23 @@ async def handle_registration_step(
             hackathon_id=hackathon_id,
             answers=answers,
             sites=sites,
+            preview=preview,
         )
         await ack(response_action="update", view=next_view)
     else:
-        # Final step — persist and close.
+        # Final step — close the modal.
         await ack(response_action="clear")
-        await _finalise_registration(client, hackathon_id, user_id, answers)
+        if preview:
+            # Preview mode — no persistence, just notify the admin.
+            try:
+                await client.chat_postMessage(
+                    channel=user_id,
+                    text=":eyes: *Preview complete* — no registration was saved.",
+                )
+            except Exception:
+                logger.exception("Failed to send preview confirmation to user %s.", user_id)
+        else:
+            await _finalise_registration(client, hackathon_id, user_id, answers)
 
 
 # ── Final persistence ───────────────────────────────────────────────
@@ -270,13 +276,15 @@ async def _finalise_registration(
     # ── Post-registration tasks ─────────────────────────────────────
     await _join_hackathon_channel(client, hackathon_id, user_id)
 
+    # ── Confirmation message ────────────────────────────────────────
     try:
-        await client.chat_postEphemeral(
+        form = load_form_by_hackathon(hackathon_id)
+        await client.chat_postMessage(
             channel=user_id,
-            user=user_id,
             text=(
-                f":white_check_mark: You're registered for the *{hackathon_id}* hackathon! "
-                "You can edit your registration with `/nf-core-bot hackathon edit`."
+                f":tada: You're registered for *{form.title}*!\n"
+                f"You've been added to <#{form.channel_id}>.\n"
+                f"<{form.url}|Find out more about this event>"
             ),
         )
     except Exception:
@@ -292,6 +300,7 @@ async def open_registration_modal(
     hackathon_id: str,
     user_id: str,
     existing_data: dict[str, Any] | None = None,
+    preview: bool = False,
 ) -> None:
     """Open the first step of the registration modal for *user_id*.
 
@@ -309,6 +318,9 @@ async def open_registration_modal(
     existing_data:
         Pre-existing registration data for edit flows.  When provided,
         fields are pre-populated with these values.
+    preview:
+        When ``True``, no registration is saved and no channel join
+        happens — the modal is opened for admin preview only.
     """
     answers: dict[str, Any] = existing_data or {}
 
@@ -346,6 +358,7 @@ async def open_registration_modal(
         hackathon_id=hackathon_id,
         answers=answers,
         sites=sites,
+        preview=preview,
     )
 
     try:

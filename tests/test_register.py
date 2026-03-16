@@ -37,8 +37,8 @@ class TestRegister:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: None,
         )
 
         await handle_register(ack, respond, client, _body())
@@ -50,8 +50,8 @@ class TestRegister:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -67,8 +67,8 @@ class TestRegister:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -85,12 +85,15 @@ class TestRegister:
         ack.assert_awaited_once()
         mock_open_modal.assert_awaited_once_with(client, "T_TRIGGER", "h1", "U_USER")
 
-    async def test_get_active_hackathon_exception(
+    async def test_get_active_form_exception(
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        def _raise() -> None:
+            raise RuntimeError("db down")
+
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(side_effect=RuntimeError("db down")),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            _raise,
         )
 
         await handle_register(ack, respond, client, _body())
@@ -107,8 +110,8 @@ class TestEdit:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: None,
         )
 
         await handle_edit(ack, respond, client, _body())
@@ -120,8 +123,8 @@ class TestEdit:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -137,8 +140,8 @@ class TestEdit:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -175,8 +178,8 @@ class TestCancel:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: None,
         )
 
         await handle_cancel(ack, respond, client, _body())
@@ -188,8 +191,8 @@ class TestCancel:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -205,8 +208,8 @@ class TestCancel:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "March 2026"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1", "title": "March 2026"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",
@@ -229,8 +232,8 @@ class TestCancel:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.register.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "March 2026"}),
+            "nf_core_bot.commands.hackathon.register.get_active_form",
+            lambda: {"hackathon_id": "h1", "title": "March 2026"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.register.get_registration",

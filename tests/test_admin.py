@@ -1,4 +1,4 @@
-"""Tests for nf_core_bot.commands.hackathon.admin — all 10 admin handlers."""
+"""Tests for nf_core_bot.commands.hackathon.admin — admin handlers."""
 
 from __future__ import annotations
 
@@ -9,16 +9,12 @@ import pytest
 from nf_core_bot.commands.hackathon.admin import (
     handle_admin_add_organiser,
     handle_admin_add_site,
-    handle_admin_archive,
-    handle_admin_close,
-    handle_admin_create,
     handle_admin_list,
     handle_admin_list_sites,
-    handle_admin_open,
+    handle_admin_preview,
     handle_admin_remove_organiser,
     handle_admin_remove_site,
 )
-from nf_core_bot.forms.loader import FormDefinition, FormStep
 
 
 @pytest.fixture()
@@ -31,264 +27,44 @@ def respond() -> AsyncMock:
     return AsyncMock()
 
 
-# ── handle_admin_create ──────────────────────────────────────────────
-
-
-class TestAdminCreate:
-    async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        form = FormDefinition(hackathon="march-2026", steps=[FormStep(id="s1", title="Step 1")])
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.load_form_by_hackathon",
-            lambda hid: form,
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.create_hackathon",
-            AsyncMock(),
-        )
-
-        await handle_admin_create(ack, respond, ["march-2026", "March", "2026", "Hackathon"])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "march-2026" in text
-        assert "draft" in text
-        assert "1 steps" in text
-
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_create(ack, respond, ["only-id"])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
-
-    async def test_missing_all_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_create(ack, respond, [])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
-
-    async def test_duplicate_id(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        form = FormDefinition(hackathon="march-2026", steps=[FormStep(id="s1", title="Step 1")])
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.load_form_by_hackathon",
-            lambda hid: form,
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.create_hackathon",
-            AsyncMock(side_effect=ValueError("already exists")),
-        )
-
-        await handle_admin_create(ack, respond, ["march-2026", "March", "Hackathon"])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        assert "already exists" in respond.call_args.kwargs["text"]
-
-    async def test_missing_yaml(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        def _no_yaml(hid: str) -> None:
-            raise FileNotFoundError("no yaml")
-
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.load_form_by_hackathon",
-            _no_yaml,
-        )
-
-        await handle_admin_create(ack, respond, ["march-2026", "March", "Hackathon"])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        assert "No form YAML found" in respond.call_args.kwargs["text"]
-
-
-# ── handle_admin_open ────────────────────────────────────────────────
-
-
-class TestAdminOpen:
-    async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "draft"}),
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.update_hackathon_status",
-            AsyncMock(),
-        )
-
-        await handle_admin_open(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        respond.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "open" in text
-        assert "draft" in text
-
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_open(ack, respond, [])
-
-        ack.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
-
-    async def test_hackathon_not_found(
-        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
-        )
-
-        await handle_admin_open(ack, respond, ["no-such"])
-
-        ack.assert_awaited_once()
-        assert "not found" in respond.call_args.kwargs["text"]
-
-    async def test_wrong_status(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "archived"}),
-        )
-
-        await handle_admin_open(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        assert "Cannot open" in respond.call_args.kwargs["text"]
-
-    async def test_open_from_closed(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "closed"}),
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.update_hackathon_status",
-            AsyncMock(),
-        )
-
-        await handle_admin_open(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "open" in text
-        assert "closed" in text
-
-
-# ── handle_admin_close ───────────────────────────────────────────────
-
-
-class TestAdminClose:
-    async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "open"}),
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.update_hackathon_status",
-            AsyncMock(),
-        )
-
-        await handle_admin_close(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "closed" in text
-
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_close(ack, respond, [])
-
-        ack.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
-
-    async def test_hackathon_not_found(
-        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
-        )
-
-        await handle_admin_close(ack, respond, ["no-such"])
-
-        ack.assert_awaited_once()
-        assert "not found" in respond.call_args.kwargs["text"]
-
-    async def test_wrong_status(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "draft"}),
-        )
-
-        await handle_admin_close(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        assert "Cannot close" in respond.call_args.kwargs["text"]
-
-
-# ── handle_admin_archive ─────────────────────────────────────────────
-
-
-class TestAdminArchive:
-    async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "status": "closed"}),
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.update_hackathon_status",
-            AsyncMock(),
-        )
-
-        await handle_admin_archive(ack, respond, ["h1"])
-
-        ack.assert_awaited_once()
-        text = respond.call_args.kwargs["text"]
-        assert "archived" in text
-
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_archive(ack, respond, [])
-
-        ack.assert_awaited_once()
-        assert "Usage:" in respond.call_args.kwargs["text"]
-
-    async def test_hackathon_not_found(
-        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
-        )
-
-        await handle_admin_archive(ack, respond, ["no-such"])
-
-        ack.assert_awaited_once()
-        assert "not found" in respond.call_args.kwargs["text"]
-
-
 # ── handle_admin_list ────────────────────────────────────────────────
 
 
 class TestAdminList:
     async def test_empty_list(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.list_hackathons",
-            AsyncMock(return_value=[]),
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [],
         )
 
         await handle_admin_list(ack, respond)
 
         ack.assert_awaited_once()
-        assert "No hackathons found" in respond.call_args.kwargs["text"]
+        assert "No hackathon forms found" in respond.call_args.kwargs["text"]
 
     async def test_multiple_hackathons(
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.list_hackathons",
-            AsyncMock(
-                return_value=[
-                    {"hackathon_id": "h1", "title": "First", "status": "open", "created_at": "2026-01-01"},
-                    {"hackathon_id": "h2", "title": "Second", "status": "draft", "created_at": "2026-02-01"},
-                ]
-            ),
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [
+                {
+                    "hackathon_id": "h1",
+                    "title": "First",
+                    "status": "open",
+                    "date_start": "2026-03-11",
+                    "date_end": "2026-03-13",
+                    "url": "https://nf-co.re/events/2026/hackathon-march-2026",
+                },
+                {
+                    "hackathon_id": "h2",
+                    "title": "Second",
+                    "status": "draft",
+                    "date_start": "2026-06-01",
+                    "date_end": "2026-06-03",
+                    "url": "https://nf-co.re/events/2026/hackathon-june-2026",
+                },
+            ],
         )
 
         await handle_admin_list(ack, respond)
@@ -299,6 +75,51 @@ class TestAdminList:
         assert "h2" in text
         assert "First" in text
         assert "Second" in text
+        assert "open" in text
+        assert "draft" in text
+        assert "2026-03-11" in text
+        assert "2026-06-01" in text
+        assert "https://nf-co.re/events/2026/hackathon-march-2026" in text
+
+
+# ── handle_admin_preview ─────────────────────────────────────────────
+
+
+class TestAdminPreview:
+    async def test_missing_hackathon_id(self, ack: AsyncMock, respond: AsyncMock) -> None:
+        client = AsyncMock()
+        body = {"trigger_id": "T123", "user_id": "U123"}
+        await handle_admin_preview(ack, respond, client, body, "")
+        ack.assert_awaited_once()
+        assert "Usage" in str(respond.call_args)
+
+    async def test_hackathon_not_found(
+        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = AsyncMock()
+        body = {"trigger_id": "T123", "user_id": "U123"}
+        monkeypatch.setattr("nf_core_bot.commands.hackathon.admin.get_form_metadata", lambda hid: None)
+        await handle_admin_preview(ack, respond, client, body, "unknown")
+        ack.assert_awaited_once()
+        assert "No form YAML found" in str(respond.call_args)
+
+    async def test_success_opens_modal(
+        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = AsyncMock()
+        body = {"trigger_id": "T123", "user_id": "U123"}
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": "h1", "title": "Test"},
+        )
+        mock_open = AsyncMock()
+        monkeypatch.setattr("nf_core_bot.forms.handler.open_registration_modal", mock_open)
+        await handle_admin_preview(ack, respond, client, body, "h1")
+        ack.assert_awaited_once()
+        mock_open.assert_awaited_once()
+        # Check preview=True was passed
+        call_kwargs = mock_open.call_args
+        assert call_kwargs[1].get("preview") is True or call_kwargs[0][-1] is True  # last positional or keyword
 
 
 # ── handle_admin_add_site ────────────────────────────────────────────
@@ -307,8 +128,8 @@ class TestAdminList:
 class TestAdminAddSite:
     async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.add_site",
@@ -332,8 +153,8 @@ class TestAdminAddSite:
 
     async def test_duplicate_site(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.add_site",
@@ -347,8 +168,8 @@ class TestAdminAddSite:
 
     async def test_bad_pipe_format(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
 
         # Missing pipe separators — only two parts instead of three
@@ -361,8 +182,8 @@ class TestAdminAddSite:
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: None,
         )
 
         await handle_admin_add_site(ack, respond, ["h1", "site-id", "Name", "|", "City", "|", "Country"])
@@ -414,8 +235,8 @@ class TestAdminListSites:
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.list_sites",
@@ -449,8 +270,8 @@ class TestAdminListSites:
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: None,
         )
 
         await handle_admin_list_sites(ack, respond, ["no-such"])
@@ -460,8 +281,8 @@ class TestAdminListSites:
 
     async def test_no_sites(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.list_sites",
@@ -480,8 +301,8 @@ class TestAdminListSites:
 class TestAdminAddOrganiser:
     async def test_success(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.db.sites.get_site",
@@ -515,8 +336,8 @@ class TestAdminAddOrganiser:
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: None,
         )
 
         await handle_admin_add_organiser(ack, respond, ["h1", "s1", "<@U01ABCDEF>"])
@@ -526,8 +347,8 @@ class TestAdminAddOrganiser:
 
     async def test_site_not_found(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.db.sites.get_site",
@@ -543,8 +364,8 @@ class TestAdminAddOrganiser:
     async def test_mention_with_name(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         """Slack mentions can include a pipe-delimited display name."""
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1"}),
+            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
+            lambda hid: {"hackathon_id": hid, "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.db.sites.get_site",

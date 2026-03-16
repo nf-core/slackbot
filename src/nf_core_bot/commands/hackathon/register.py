@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from nf_core_bot.db.hackathons import get_active_hackathon
 from nf_core_bot.db.registrations import delete_registration, get_registration
 from nf_core_bot.forms.handler import open_registration_modal
+from nf_core_bot.forms.loader import get_active_form
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck
@@ -30,7 +30,7 @@ async def handle_register(
     trigger_id: str = body["trigger_id"]
 
     try:
-        hackathon = await get_active_hackathon()
+        hackathon = get_active_form()
     except Exception:
         logger.exception("Failed to look up active hackathon.")
         await respond(
@@ -81,7 +81,7 @@ async def handle_edit(
     trigger_id: str = body["trigger_id"]
 
     try:
-        hackathon = await get_active_hackathon()
+        hackathon = get_active_form()
     except Exception:
         logger.exception("Failed to look up active hackathon.")
         await respond(
@@ -143,7 +143,7 @@ async def handle_cancel(
     user_id: str = body["user_id"]
 
     try:
-        hackathon = await get_active_hackathon()
+        hackathon = get_active_form()
     except Exception:
         logger.exception("Failed to look up active hackathon.")
         await respond(

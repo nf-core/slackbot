@@ -5,11 +5,12 @@ Usage: ``/nf-core-bot hackathon list``
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import TYPE_CHECKING, Any
 
-from nf_core_bot.db.hackathons import list_hackathons
 from nf_core_bot.db.registrations import count_registrations, get_registration
+from nf_core_bot.forms.loader import list_all_forms
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck
@@ -26,6 +27,37 @@ _STATUS_LABELS: dict[str, str] = {
 }
 
 
+def _format_date_range(start_iso: str, end_iso: str) -> str:
+    """Format an ISO date range as a compact human-readable string.
+
+    Examples: "11–13 Mar 2026", "28 Feb – 2 Mar 2026", "15 Dec 2025 – 3 Jan 2026".
+    Returns an empty string if both dates are missing.
+    """
+    if not start_iso and not end_iso:
+        return ""
+
+    try:
+        start = datetime.date.fromisoformat(start_iso) if start_iso else None
+        end = datetime.date.fromisoformat(end_iso) if end_iso else None
+    except ValueError:
+        return start_iso if start_iso else end_iso
+
+    if start and end:
+        if start.year == end.year and start.month == end.month:
+            # Same month: "11–13 Mar 2026"
+            return f"{start.day}–{end.day} {end.strftime('%b %Y')}"
+        if start.year == end.year:
+            # Same year, different months: "28 Feb – 2 Mar 2026"
+            return f"{start.day} {start.strftime('%b')} – {end.day} {end.strftime('%b %Y')}"
+        # Different years: "15 Dec 2025 – 3 Jan 2026"
+        return f"{start.day} {start.strftime('%b %Y')} – {end.day} {end.strftime('%b %Y')}"
+
+    if start:
+        return f"{start.day} {start.strftime('%b %Y')}"
+    assert end is not None
+    return f"{end.day} {end.strftime('%b %Y')}"
+
+
 async def handle_list(
     ack: AsyncAck,
     respond: AsyncRespond,
@@ -38,7 +70,7 @@ async def handle_list(
     user_id: str = body["user_id"]
 
     try:
-        hackathons = await list_hackathons()
+        hackathons = list_all_forms()
     except Exception:
         logger.exception("Failed to list hackathons.")
         await respond(
@@ -47,8 +79,8 @@ async def handle_list(
         )
         return
 
-    # Filter out archived hackathons.
-    visible = [h for h in hackathons if h.get("status") != "archived"]
+    # Filter out draft and archived hackathons — regular users see only open/closed.
+    visible = [h for h in hackathons if h.get("status") not in ("draft", "archived")]
 
     if not visible:
         await respond(
@@ -56,9 +88,6 @@ async def handle_list(
             response_type="ephemeral",
         )
         return
-
-    # Sort by created_at descending (newest first).
-    visible.sort(key=lambda h: h.get("created_at", ""), reverse=True)
 
     blocks: list[dict[str, Any]] = [
         {
@@ -72,6 +101,9 @@ async def handle_list(
         title: str = hackathon.get("title", hackathon_id)
         status: str = hackathon.get("status", "draft")
         status_label = _STATUS_LABELS.get(status, status.capitalize())
+
+        # Build a human-readable date range.
+        date_line = _format_date_range(hackathon.get("date_start", ""), hackathon.get("date_end", ""))
 
         # Build the status line.
         if status == "open":
@@ -101,9 +133,17 @@ async def handle_list(
             reg_line = ""
 
         # Assemble the section text.
-        lines = [f"*{title}*", status_line, f"{total} registered"]
+        lines = [f"*{title}*"]
+        if date_line:
+            lines.append(date_line)
+        lines.append(status_line)
+        lines.append(f"{total} registered")
         if reg_line:
             lines.append(reg_line)
+
+        url = hackathon.get("url")
+        if url:
+            lines.append(f"<{url}|More info>")
 
         blocks.append(
             {

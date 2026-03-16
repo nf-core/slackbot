@@ -11,6 +11,16 @@ import pytest
 from nf_core_bot.forms.handler import _extract_values, handle_registration_step, open_registration_modal
 from nf_core_bot.forms.loader import FormDefinition, FormField, FormStep
 
+# Default metadata fields for constructing FormDefinition in tests.
+_FORM_DEFAULTS = {
+    "title": "Test Hackathon",
+    "status": "open",
+    "channel_id": "C123TEST",
+    "url": "https://example.com",
+    "date_start": "2026-01-01",
+    "date_end": "2026-01-03",
+}
+
 
 @pytest.fixture()
 def client() -> AsyncMock:
@@ -129,6 +139,7 @@ class TestOpenRegistrationModal:
     async def test_success_opens_view(self, client: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         form = FormDefinition(
             hackathon="h1",
+            **_FORM_DEFAULTS,
             steps=[
                 FormStep(
                     id="step1",
@@ -173,6 +184,7 @@ class TestOpenRegistrationModal:
     async def test_existing_data_passed(self, client: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         form = FormDefinition(
             hackathon="h1",
+            **_FORM_DEFAULTS,
             steps=[
                 FormStep(
                     id="step1",
@@ -227,6 +239,7 @@ class TestHandleRegistrationStep:
         """When there are more steps, ack should be called with response_action='update'."""
         form = FormDefinition(
             hackathon="h1",
+            **_FORM_DEFAULTS,
             steps=[
                 FormStep(
                     id="step1",
@@ -272,6 +285,7 @@ class TestHandleRegistrationStep:
         """When this is the last step, ack with 'clear' and persist registration."""
         form = FormDefinition(
             hackathon="h1",
+            **_FORM_DEFAULTS,
             steps=[
                 FormStep(
                     id="step1",
@@ -339,6 +353,7 @@ class TestHandleRegistrationStep:
         """Answers from earlier steps should be preserved and merged."""
         form = FormDefinition(
             hackathon="h1",
+            **_FORM_DEFAULTS,
             steps=[
                 FormStep(
                     id="step1",

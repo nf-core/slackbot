@@ -1,7 +1,7 @@
 """Admin-only hackathon commands (core-team only).
 
 Subcommands:
-    create, open, close, archive, list
+    list, preview
     add-site, remove-site, list-sites
     add-organiser, remove-organiser
 """
@@ -12,12 +12,6 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from nf_core_bot.db.hackathons import (
-    create_hackathon,
-    get_hackathon,
-    list_hackathons,
-    update_hackathon_status,
-)
 from nf_core_bot.db.sites import (
     add_organiser,
     add_site,
@@ -26,11 +20,12 @@ from nf_core_bot.db.sites import (
     remove_organiser,
     remove_site,
 )
-from nf_core_bot.forms.loader import load_form_by_hackathon
+from nf_core_bot.forms.loader import get_form_metadata, list_all_forms
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
     from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
+    from slack_sdk.web.async_client import AsyncWebClient
 
 logger = logging.getLogger(__name__)
 
@@ -40,208 +35,29 @@ _MENTION_RE = re.compile(r"<@(U[A-Z0-9]+)(?:\|[^>]*)?>")
 # Status emoji mapping for nicer Slack output
 _STATUS_EMOJI: dict[str, str] = {
     "draft": ":pencil2:",
-    "open": ":large_green_circle:",
-    "closed": ":no_entry_sign:",
+    "open": ":green_circle:",
+    "closed": ":red_circle:",
     "archived": ":file_cabinet:",
 }
 
 
-# ── Hackathon lifecycle ─────────────────────────────────────────────
-
-
-async def handle_admin_create(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """Create a new hackathon.
-
-    Usage: ``/nf-core-bot hackathon admin create <hackathon-id> <title…>``
-    """
-    await ack()
-
-    if len(args) < 2:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin create <hackathon-id> <title>`",
-            response_type="ephemeral",
-        )
-        return
-
-    hackathon_id = args[0]
-    title = " ".join(args[1:])
-
-    # Verify a matching form YAML exists before creating the DB record.
-    try:
-        form = load_form_by_hackathon(hackathon_id)
-    except FileNotFoundError:
-        await respond(
-            text=f"No form YAML found for hackathon `{hackathon_id}`. "
-            "Please add a YAML file to the `forms/` directory first.",
-            response_type="ephemeral",
-        )
-        return
-
-    yaml_filename = f"{hackathon_id}.yaml"
-
-    try:
-        await create_hackathon(hackathon_id, title, yaml_filename)
-    except ValueError as exc:
-        await respond(text=f"Error: {exc}", response_type="ephemeral")
-        return
-
-    logger.info("Admin created hackathon '%s' ('%s').", hackathon_id, title)
-    await respond(
-        text=f"Hackathon `{hackathon_id}` created with status *draft*.\n"
-        f"• *Title:* {title}\n"
-        f"• *Form:* `{yaml_filename}` ({len(form.steps)} steps)",
-        response_type="ephemeral",
-    )
-
-
-async def handle_admin_open(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """Open a hackathon for registration.
-
-    Usage: ``/nf-core-bot hackathon admin open <hackathon-id>``
-    """
-    await ack()
-
-    if not args:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin open <hackathon-id>`",
-            response_type="ephemeral",
-        )
-        return
-
-    hackathon_id = args[0]
-
-    # Fetch current state so we can report the transition.
-    hackathon = await get_hackathon(hackathon_id)
-    if hackathon is None:
-        await respond(
-            text=f"Hackathon `{hackathon_id}` not found.",
-            response_type="ephemeral",
-        )
-        return
-
-    current_status = hackathon.get("status", "unknown")
-    if current_status not in ("draft", "closed"):
-        await respond(
-            text=f"Cannot open hackathon `{hackathon_id}` — current status is *{current_status}*. "
-            "Only `draft` or `closed` hackathons can be opened.",
-            response_type="ephemeral",
-        )
-        return
-
-    try:
-        await update_hackathon_status(hackathon_id, "open")
-    except ValueError as exc:
-        await respond(text=f"Error: {exc}", response_type="ephemeral")
-        return
-
-    logger.info("Admin opened hackathon '%s' (was '%s').", hackathon_id, current_status)
-    await respond(
-        text=f"Hackathon `{hackathon_id}` is now *open* for registration (was *{current_status}*).",
-        response_type="ephemeral",
-    )
-
-
-async def handle_admin_close(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """Close registration for a hackathon.
-
-    Usage: ``/nf-core-bot hackathon admin close <hackathon-id>``
-    """
-    await ack()
-
-    if not args:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin close <hackathon-id>`",
-            response_type="ephemeral",
-        )
-        return
-
-    hackathon_id = args[0]
-
-    hackathon = await get_hackathon(hackathon_id)
-    if hackathon is None:
-        await respond(
-            text=f"Hackathon `{hackathon_id}` not found.",
-            response_type="ephemeral",
-        )
-        return
-
-    current_status = hackathon.get("status", "unknown")
-    if current_status != "open":
-        await respond(
-            text=f"Cannot close hackathon `{hackathon_id}` — current status is *{current_status}*. "
-            "Only `open` hackathons can be closed.",
-            response_type="ephemeral",
-        )
-        return
-
-    try:
-        await update_hackathon_status(hackathon_id, "closed")
-    except ValueError as exc:
-        await respond(text=f"Error: {exc}", response_type="ephemeral")
-        return
-
-    logger.info("Admin closed hackathon '%s'.", hackathon_id)
-    await respond(
-        text=f"Hackathon `{hackathon_id}` is now *closed* (was *{current_status}*).",
-        response_type="ephemeral",
-    )
-
-
-async def handle_admin_archive(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """Archive a hackathon.
-
-    Usage: ``/nf-core-bot hackathon admin archive <hackathon-id>``
-    """
-    await ack()
-
-    if not args:
-        await respond(
-            text="Usage: `/nf-core-bot hackathon admin archive <hackathon-id>`",
-            response_type="ephemeral",
-        )
-        return
-
-    hackathon_id = args[0]
-
-    hackathon = await get_hackathon(hackathon_id)
-    if hackathon is None:
-        await respond(
-            text=f"Hackathon `{hackathon_id}` not found.",
-            response_type="ephemeral",
-        )
-        return
-
-    try:
-        await update_hackathon_status(hackathon_id, "archived")
-    except ValueError as exc:
-        await respond(text=f"Error: {exc}", response_type="ephemeral")
-        return
-
-    current_status = hackathon.get("status", "unknown")
-    logger.info("Admin archived hackathon '%s' (was '%s').", hackathon_id, current_status)
-    await respond(
-        text=f"Hackathon `{hackathon_id}` is now *archived* (was *{current_status}*).",
-        response_type="ephemeral",
-    )
+# ── Hackathon listing & preview ─────────────────────────────────────
 
 
 async def handle_admin_list(ack: Ack, respond: Respond) -> None:
-    """List all hackathons.
+    """List all hackathons (from YAML form files).
 
     Usage: ``/nf-core-bot hackathon admin list``
     """
     await ack()
 
-    hackathons = await list_hackathons()
+    hackathons = list_all_forms()
     if not hackathons:
         await respond(
-            text="No hackathons found. Create one with `/nf-core-bot hackathon admin create`.",
+            text="No hackathon forms found.",
             response_type="ephemeral",
         )
         return
-
-    # Sort by created_at descending (most recent first).
-    hackathons.sort(key=lambda h: h.get("created_at", ""), reverse=True)
 
     lines: list[str] = ["*Hackathons:*\n"]
     for h in hackathons:
@@ -249,9 +65,48 @@ async def handle_admin_list(ack: Ack, respond: Respond) -> None:
         title = h.get("title", "Untitled")
         status = h.get("status", "unknown")
         emoji = _STATUS_EMOJI.get(status, ":grey_question:")
-        lines.append(f"• {emoji} `{hid}` — {title} ({status})")
+        date_start = h.get("date_start", "?")
+        date_end = h.get("date_end", "?")
+        url = h.get("url", "")
+        lines.append(f"{emoji} *{title}* (`{hid}`)")
+        lines.append(f"{date_start} — {date_end}  ·  {status}  ·  {url}")
 
     await respond(text="\n".join(lines), response_type="ephemeral")
+
+
+async def handle_admin_preview(
+    ack: Ack, respond: Respond, client: AsyncWebClient, body: dict[str, str], rest: str
+) -> None:
+    """Preview the registration form for a hackathon."""
+    await ack()
+
+    hackathon_id = rest.strip()
+    if not hackathon_id:
+        await respond(
+            text="Usage: `/nf-core-bot hackathon admin preview <hackathon-id>`",
+            response_type="ephemeral",
+        )
+        return
+
+    # Check form exists
+    metadata = get_form_metadata(hackathon_id)
+    if not metadata:
+        await respond(
+            text=f"No form YAML found for hackathon `{hackathon_id}`.",
+            response_type="ephemeral",
+        )
+        return
+
+    # Open registration modal in preview mode
+    from nf_core_bot.forms.handler import open_registration_modal
+
+    trigger_id = body.get("trigger_id", "")
+    user_id = body.get("user_id", "")
+    try:
+        await open_registration_modal(client, trigger_id, hackathon_id, user_id, preview=True)
+    except Exception:
+        logger.exception("Failed to open preview modal")
+        await respond(text="Failed to open preview modal.", response_type="ephemeral")
 
 
 # ── Site management ──────────────────────────────────────────────────
@@ -292,7 +147,7 @@ async def handle_admin_add_site(ack: Ack, respond: Respond, args: list[str]) -> 
     name, city, country = parts
 
     # Verify the hackathon exists.
-    hackathon = await get_hackathon(hackathon_id)
+    hackathon = get_form_metadata(hackathon_id)
     if hackathon is None:
         await respond(
             text=f"Hackathon `{hackathon_id}` not found.",
@@ -363,7 +218,7 @@ async def handle_admin_list_sites(ack: Ack, respond: Respond, args: list[str]) -
     hackathon_id = args[0]
 
     # Verify the hackathon exists.
-    hackathon = await get_hackathon(hackathon_id)
+    hackathon = get_form_metadata(hackathon_id)
     if hackathon is None:
         await respond(
             text=f"Hackathon `{hackathon_id}` not found.",
@@ -431,7 +286,7 @@ async def handle_admin_add_organiser(ack: Ack, respond: Respond, args: list[str]
         return
 
     # Verify the hackathon and site exist.
-    hackathon = await get_hackathon(hackathon_id)
+    hackathon = get_form_metadata(hackathon_id)
     if hackathon is None:
         await respond(
             text=f"Hackathon `{hackathon_id}` not found.",

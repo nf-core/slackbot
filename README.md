@@ -15,7 +15,8 @@ Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on AW
 - **Dynamic options** — `options_from: sites` populates from DynamoDB, `options_from: countries` from a built-in list
 - **Profile auto-population** — email, Slack display name, and GitHub username are read from the Slack profile API
 - **Self-service** — users can edit or cancel their own registrations
-- **Hackathon lifecycle** — create, open, close, archive events
+- **YAML-driven lifecycle** — hackathon metadata and status managed in version-controlled YAML files
+- **JSON schema validation** — `schemas/hackathon-form.schema.json` with VS Code IntelliSense support
 - **Site management** — add/remove local sites per hackathon
 - **Organiser access** — site organisers can pull attendee lists for their site(s)
 - **Permission model** — admin commands restricted to `@core-team` Slack user group
@@ -37,11 +38,15 @@ Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on AW
 
 ```
 Slack ←→ ECS Fargate (Bolt app, Python)
-              ↕
-          DynamoDB (single-table design)
+              ↕                  ↕
+          DynamoDB           YAML form files
+    (sites, organisers,     (hackathon metadata,
+     registrations)          form definitions)
               ↕
           GitHub API (org membership checks + invitations)
 ```
+
+Hackathon lifecycle (creation, status changes, form definitions) is managed entirely through YAML files in the `forms/` directory. Creating or updating a hackathon means editing a YAML file and pushing to `main` — the bot auto-deploys and picks up the changes. DynamoDB is used only for runtime data: sites, organisers, and registrations.
 
 ### AWS Services
 
@@ -53,11 +58,12 @@ Slack ←→ ECS Fargate (Bolt app, Python)
 
 ### DynamoDB Single-Table Design
 
+DynamoDB stores runtime data only — sites, organisers, and registrations. Hackathon metadata (title, status, dates, channel, URL) lives in YAML files.
+
 Partition key: `PK`, Sort key: `SK`
 
 | Entity       | PK               | SK                                   | Key attributes                                                                                   |
 | ------------ | ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Hackathon    | `HACKATHON#<id>` | `META`                               | id, title, status (draft/open/closed/archived), channel_id, form_id, created_by, created_at      |
 | Site         | `HACKATHON#<id>` | `SITE#<site-id>`                     | site_id, name, city, country, created_by                                                         |
 | Organiser    | `HACKATHON#<id>` | `SITE#<site-id>#ORG#<slack-user-id>` | slack_id, added_by, added_at                                                                     |
 | Registration | `HACKATHON#<id>` | `REG#<slack-user-id>`                | slack_id, github_username, status (active/cancelled), form_data (map), registered_at, updated_at |
@@ -84,7 +90,7 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 /nf-core-bot github help
 
 # User commands
-/nf-core-bot hackathon list                      # List hackathons + your registration status
+/nf-core-bot hackathon list                      # List hackathons with dates, status, event URL
 /nf-core-bot hackathon register                   # Register for the active hackathon
 /nf-core-bot hackathon edit                       # Edit your registration
 /nf-core-bot hackathon cancel                     # Cancel your registration
@@ -93,11 +99,8 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 /nf-core-bot hackathon attendees [hackathon-id]   # List attendees for your site(s)
 
 # Admin commands (@core-team only)
-/nf-core-bot hackathon admin create <id> <title>
-/nf-core-bot hackathon admin open <id>
-/nf-core-bot hackathon admin close <id>
-/nf-core-bot hackathon admin archive <id>
-/nf-core-bot hackathon admin list
+/nf-core-bot hackathon admin list                  # All hackathons (including draft/archived)
+/nf-core-bot hackathon admin preview <hackathon-id> # Preview registration form (no data saved)
 
 /nf-core-bot hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
 /nf-core-bot hackathon admin remove-site <hackathon-id> <site-id>
@@ -120,6 +123,7 @@ See [docs/commands.md](docs/commands.md) for full command reference with example
 
 - Slack allows only one slash command per app — `/nf-core-bot` is the entry point, everything else is parsed as subcommands
 - Slack does not allow custom slash commands in threads — use the "Add to GitHub org" message shortcut instead
+- Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/` — not via slash commands
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
 - All responses to commands are **ephemeral** (only visible to the caller) unless explicitly posting to a channel
 - Exception: `github add-member` posts **visible thread replies** so the original requester can see the outcome
@@ -127,11 +131,20 @@ See [docs/commands.md](docs/commands.md) for full command reference with example
 
 ## Form Configuration
 
-Forms are defined in YAML, one per hackathon. See `forms/2026-march.yaml` for a full example. Abbreviated structure:
+Forms are defined in YAML, one per hackathon. Each file contains both the hackathon metadata (title, status, dates, etc.) and the form step definitions. A JSON schema at `schemas/hackathon-form.schema.json` validates the YAML and provides VS Code IntelliSense via the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
+
+See `forms/2026-march.yaml` for a full example. Abbreviated structure:
 
 ```yaml
 # forms/2026-march.yaml
+# yaml-language-server: $schema=../schemas/hackathon-form.schema.json
 hackathon: 2026-march
+title: "nf-core Hackathon — March 2026"
+status: draft          # draft | open | closed | archived
+channel: https://nfcore.slack.com/archives/C0ACF0TPF5E
+url: https://nf-co.re/events/2026/hackathon-march-2026
+date_start: "2026-03-11"
+date_end: "2026-03-13"
 steps:
   - id: welcome
     title: "nf-core Hackathon — March 2026"
@@ -201,6 +214,19 @@ steps:
             value: accepted
 ```
 
+### Required metadata fields
+
+| Field | Description |
+|-------|-------------|
+| `hackathon` | Unique identifier (e.g. `2026-march`). Must match the filename: `forms/<id>.yaml` |
+| `title` | Display title shown in modals and listings |
+| `status` | One of `draft`, `open`, `closed`, `archived` |
+| `channel` | Slack channel URL (`https://nfcore.slack.com/archives/C...`) or raw channel ID (`C...`). To get the URL: right-click the channel in Slack > "Copy" > "Copy link" |
+| `url` | Event page URL (e.g. `https://nf-co.re/events/2026/hackathon-march-2026`) |
+| `date_start` | Start date in `YYYY-MM-DD` format |
+| `date_end` | End date in `YYYY-MM-DD` format |
+| `steps` | List of form steps (see below) |
+
 ### Supported field types
 
 These map directly to Slack Block Kit elements:
@@ -230,7 +256,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
 ```
 1. User: /nf-core-bot hackathon register
 
-2. Bot checks: is there exactly one hackathon with status=open?
+2. Bot checks: is there exactly one hackathon YAML with status=open?
    ├─ None → ephemeral: "No hackathon is currently open for registration"
    ├─ Multiple → ephemeral: "Multiple hackathons open — this shouldn't happen, ping @core-team"
    └─ One → continue
@@ -259,14 +285,17 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
 
 ### Admin Workflow
 
-1. Create form YAML in `forms/` directory (e.g. `forms/2026-march.yaml`)
-2. `/nf-core-bot hackathon admin create 2026-march "nf-core Hackathon March 2026"`
-3. Add sites: `/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
-4. Add organisers: `/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose`
-5. Open registrations: `/nf-core-bot hackathon admin open 2026-march`
-6. Monitor: `/nf-core-bot hackathon attendees`
-7. Close: `/nf-core-bot hackathon admin close 2026-march`
-8. Archive: `/nf-core-bot hackathon admin archive 2026-march`
+Hackathon lifecycle is managed entirely through YAML files — no slash commands needed for creation or status changes.
+
+1. **Create the YAML file** — copy an existing form in `forms/` or start from the JSON schema. Set `status: draft`.
+2. **Commit and push** — the bot auto-deploys and picks up the new file.
+3. **Preview the form** — `/nf-core-bot hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
+4. **Add sites** — `/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
+5. **Add organisers** — `/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose`
+6. **Open registrations** — change `status: open` in the YAML, commit, push
+7. **Monitor** — `/nf-core-bot hackathon attendees`
+8. **Close registrations** — change `status: closed` in the YAML, commit, push
+9. **Archive** — change `status: archived` to hide from `hackathon list`
 
 ## Project Structure
 
@@ -283,6 +312,8 @@ nf-core-bot/
 │   └── deployment.md            # AWS ECS Fargate deployment
 ├── forms/
 │   └── 2026-march.yaml          # Form definitions (one per hackathon)
+├── schemas/
+│   └── hackathon-form.schema.json # JSON Schema for YAML validation + IntelliSense
 ├── src/
 │   └── nf_core_bot/
 │       ├── __init__.py
@@ -294,7 +325,7 @@ nf-core-bot/
 │       │   ├── help.py          # Permission-aware help text
 │       │   ├── hackathon/
 │       │   │   ├── __init__.py
-│       │   │   ├── admin.py     # 10 admin command handlers (create, open, close, etc.)
+│       │   │   ├── admin.py     # Admin command handlers (list, preview, site/organiser management)
 │       │   │   ├── attendees.py # Attendee listing (permission-scoped)
 │       │   │   ├── list_cmd.py  # User-facing hackathon list with registration status
 │       │   │   └── register.py  # Register, edit, cancel handlers
@@ -306,9 +337,9 @@ nf-core-bot/
 │       │       └── __init__.py
 │       ├── forms/
 │       │   ├── __init__.py
-│       │   ├── loader.py        # YAML form parser with conditional logic
+│       │   ├── loader.py        # YAML form parser, metadata functions, validation
 │       │   ├── builder.py       # Block Kit modal view generator
-│       │   └── handler.py       # Modal submission handler + profile auto-population
+│       │   └── handler.py       # Modal submission handler, preview mode, channel join
 │       ├── checks/
 │       │   ├── __init__.py
 │       │   ├── github.py        # GitHub API: org membership, invitations, team management
@@ -316,7 +347,6 @@ nf-core-bot/
 │       ├── db/
 │       │   ├── __init__.py
 │       │   ├── client.py        # DynamoDB singleton client
-│       │   ├── hackathons.py    # Hackathon CRUD operations
 │       │   ├── registrations.py # Registration CRUD with GSI1 support
 │       │   └── sites.py         # Site and organiser CRUD
 │       └── permissions/
@@ -328,7 +358,6 @@ nf-core-bot/
     ├── test_add_member_shortcut.py
     ├── test_admin.py
     ├── test_attendees.py
-    ├── test_db_hackathons.py
     ├── test_db_registrations.py
     ├── test_db_sites.py
     ├── test_form_builder.py

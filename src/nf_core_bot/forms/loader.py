@@ -7,7 +7,9 @@ provides helpers for conditional step evaluation.
 
 from __future__ import annotations
 
+import datetime
 import logging
+import re
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
@@ -223,6 +225,34 @@ COUNTRIES: list[dict[str, str]] = [
     {"label": "Zimbabwe", "value": "ZW"},
 ]
 
+# ── Validation constants ────────────────────────────────────────────
+
+VALID_STATUSES = frozenset({"draft", "open", "closed", "archived"})
+_REQUIRED_METADATA = ("hackathon", "title", "status", "channel", "url", "date_start", "date_end", "steps")
+
+_CHANNEL_URL_RE = re.compile(r"https?://[a-z]+\.slack\.com/archives/(C[A-Z0-9]+)")
+_CHANNEL_ID_RE = re.compile(r"^C[A-Z0-9]+$")
+
+
+# ── Helpers ─────────────────────────────────────────────────────────
+
+
+def _parse_channel_id(value: str) -> str:
+    """Extract Slack channel ID from a URL or raw ID.
+
+    Accepts:
+      - https://nfcore.slack.com/archives/C0ACF0TPF5E
+      - C0ACF0TPF5E
+    Returns the channel ID string.
+    Raises ValueError if the format is not recognized.
+    """
+    m = _CHANNEL_URL_RE.match(value)
+    if m:
+        return m.group(1)
+    if _CHANNEL_ID_RE.match(value):
+        return value
+    raise ValueError(f"Unrecognised Slack channel format: {value!r}")
+
 
 # ── Dataclasses ─────────────────────────────────────────────────────
 
@@ -257,6 +287,12 @@ class FormDefinition:
     """The full parsed form for a hackathon."""
 
     hackathon: str
+    title: str
+    status: str  # draft | open | closed | archived
+    channel_id: str  # Always the raw ID (C...), parsed from URL or raw ID
+    url: str
+    date_start: str  # YYYY-MM-DD
+    date_end: str  # YYYY-MM-DD
     steps: list[FormStep]
 
 
@@ -303,11 +339,39 @@ def load_form(yaml_path: str | Path) -> FormDefinition:
     with path.open() as fh:
         data = yaml.safe_load(fh)
 
-    if not isinstance(data, dict) or "hackathon" not in data or "steps" not in data:
-        raise ValueError(f"Invalid form YAML — must contain 'hackathon' and 'steps': {path}")
+    if not isinstance(data, dict):
+        raise ValueError(f"Invalid form YAML — expected a mapping: {path}")
+
+    missing = [key for key in _REQUIRED_METADATA if key not in data]
+    if missing:
+        raise ValueError(f"Invalid form YAML — missing required fields {missing}: {path}")
+
+    # Validate status
+    status = data["status"]
+    if status not in VALID_STATUSES:
+        raise ValueError(f"Invalid status {status!r} in {path} — must be one of {sorted(VALID_STATUSES)}")
+
+    # Validate dates
+    for date_key in ("date_start", "date_end"):
+        try:
+            datetime.date.fromisoformat(str(data[date_key]))
+        except ValueError as exc:
+            raise ValueError(f"Invalid {date_key} {data[date_key]!r} in {path}: {exc}") from exc
+
+    # Parse channel
+    channel_id = _parse_channel_id(str(data["channel"]))
 
     steps = [_parse_step(s) for s in data["steps"]]
-    form = FormDefinition(hackathon=data["hackathon"], steps=steps)
+    form = FormDefinition(
+        hackathon=data["hackathon"],
+        title=data["title"],
+        status=status,
+        channel_id=channel_id,
+        url=data["url"],
+        date_start=str(data["date_start"]),
+        date_end=str(data["date_end"]),
+        steps=steps,
+    )
     logger.info("Loaded form '%s' with %d steps from %s.", form.hackathon, len(steps), path)
     return form
 
@@ -365,3 +429,64 @@ def get_applicable_steps(form: FormDefinition, answers: dict[str, str]) -> list[
     value.
     """
     return [step for step in form.steps if _step_condition_met(step, answers)]
+
+
+# ── Metadata helpers ────────────────────────────────────────────────
+
+
+def _form_to_dict(form: FormDefinition) -> dict[str, str]:
+    """Convert a FormDefinition to a dict for backward compatibility.
+
+    Returns dict with keys: hackathon_id, title, status, channel_id, url, date_start, date_end.
+    Note: uses 'hackathon_id' as key (not 'hackathon') for compatibility with existing callers.
+    """
+    return {
+        "hackathon_id": form.hackathon,
+        "title": form.title,
+        "status": form.status,
+        "channel_id": form.channel_id,
+        "url": form.url,
+        "date_start": form.date_start,
+        "date_end": form.date_end,
+    }
+
+
+def list_all_forms() -> list[dict[str, str]]:
+    """Scan the forms/ directory and return metadata for all hackathon forms.
+
+    Returns a list of dicts sorted by date_start descending (most recent first).
+    Silently skips YAML files that fail to parse (logs a warning).
+    """
+    results: list[dict[str, str]] = []
+    for path in sorted(_FORMS_DIR.glob("*.yaml")):
+        try:
+            form = load_form(path)
+            results.append(_form_to_dict(form))
+        except Exception:
+            logger.warning("Skipping unparseable form file: %s", path, exc_info=True)
+            continue
+    results.sort(key=lambda d: d["date_start"], reverse=True)
+    return results
+
+
+def get_active_form() -> dict[str, str] | None:
+    """Find the hackathon form with status='open'.
+
+    Returns a dict with hackathon metadata, or None if no form has status 'open'.
+    """
+    for entry in list_all_forms():
+        if entry["status"] == "open":
+            return entry
+    return None
+
+
+def get_form_metadata(hackathon_id: str) -> dict[str, str] | None:
+    """Load metadata for a specific hackathon by ID.
+
+    Returns a dict, or None if no matching form YAML exists.
+    """
+    try:
+        form = load_form_by_hackathon(hackathon_id)
+        return _form_to_dict(form)
+    except FileNotFoundError:
+        return None

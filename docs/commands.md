@@ -32,7 +32,7 @@ Show hackathon-specific commands available to you.
 /nf-core-bot hackathon list
 ```
 
-List all non-archived hackathons with their status. If you have an active registration for any listed hackathon, your registration status is shown.
+List all non-archived hackathons with their status, dates, and event URL. If you have an active registration for any listed hackathon, your registration status is shown.
 
 **Permissions:** All users.
 
@@ -98,43 +98,7 @@ List registered attendees. If `hackathon-id` is omitted, defaults to the active 
 
 All admin commands require `@core-team` Slack user group membership.
 
-### `hackathon admin create`
-
-```
-/nf-core-bot hackathon admin create <id> <title>
-```
-
-Create a new hackathon. The `id` must match a form YAML file in `forms/<id>.yaml`.
-
-**Example:**
-
-```
-/nf-core-bot hackathon admin create 2026-march "nf-core Hackathon March 2026"
-```
-
-### `hackathon admin open`
-
-```
-/nf-core-bot hackathon admin open <id>
-```
-
-Open a hackathon for registration. Changes status from `draft` to `open`. Only one hackathon should be open at a time.
-
-### `hackathon admin close`
-
-```
-/nf-core-bot hackathon admin close <id>
-```
-
-Close registrations for a hackathon. Changes status from `open` to `closed`.
-
-### `hackathon admin archive`
-
-```
-/nf-core-bot hackathon admin archive <id>
-```
-
-Archive a hackathon. Archived hackathons are hidden from `hackathon list`.
+> **Note:** Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/`, not via slash commands. See [Managing Hackathon Lifecycle](#managing-hackathon-lifecycle) below.
 
 ### `hackathon admin list`
 
@@ -142,7 +106,21 @@ Archive a hackathon. Archived hackathons are hidden from `hackathon list`.
 /nf-core-bot hackathon admin list
 ```
 
-List all hackathons including archived ones, with their current status.
+List all hackathons including draft and archived ones, with their current status, dates, and event URL. This shows hackathons from all YAML files in `forms/`.
+
+### `hackathon admin preview`
+
+```
+/nf-core-bot hackathon admin preview <hackathon-id>
+```
+
+Open the registration form for a hackathon in preview mode. The modal opens and can be stepped through, but no data is saved to DynamoDB. Useful for testing form YAML changes before opening registration.
+
+**Example:**
+
+```
+/nf-core-bot hackathon admin preview 2026-march
+```
 
 ### `hackathon admin add-site`
 
@@ -213,6 +191,58 @@ Remove a site organiser.
 ```
 /nf-core-bot hackathon admin remove-organiser 2026-march barcelona @jose
 ```
+
+---
+
+## Managing Hackathon Lifecycle
+
+Hackathon creation and status changes are managed through YAML files in the `forms/` directory — not via slash commands. Each YAML file contains both hackathon metadata and the registration form definition.
+
+### YAML form format
+
+```yaml
+# forms/2026-march.yaml
+# yaml-language-server: $schema=../schemas/hackathon-form.schema.json
+hackathon: 2026-march
+title: "nf-core Hackathon — March 2026"
+status: draft          # draft | open | closed | archived
+channel: https://nfcore.slack.com/archives/C0ACF0TPF5E
+url: https://nf-co.re/events/2026/hackathon-march-2026
+date_start: "2026-03-11"
+date_end: "2026-03-13"
+steps:
+  - id: welcome
+    title: "Welcome"
+    type: statement
+    text: |
+      Welcome to the hackathon registration!
+  # ... more steps
+```
+
+The `# yaml-language-server` comment enables VS Code IntelliSense via the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml). The JSON schema at `schemas/hackathon-form.schema.json` validates required fields and allowed values.
+
+The `channel` field accepts either a Slack channel URL (`https://nfcore.slack.com/archives/C...`) or a raw channel ID (`C...`). To get the URL: right-click the channel in Slack > "Copy" > "Copy link".
+
+### Admin workflow
+
+1. **Create the YAML file** — copy an existing form in `forms/` or start fresh using the JSON schema for guidance. Set `status: draft`.
+2. **Commit and push** — the bot auto-deploys and picks up the new hackathon.
+3. **Preview the form** — `/nf-core-bot hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
+4. **Add sites** — `/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
+5. **Add organisers** — `/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose`
+6. **Open registrations** — change `status: open` in the YAML, commit, push.
+7. **Monitor** — `/nf-core-bot hackathon attendees`
+8. **Close registrations** — change `status: closed` in the YAML, commit, push.
+9. **Archive** — change `status: archived` to hide from user-facing `hackathon list`.
+
+### Status values
+
+| Status | Effect |
+|--------|--------|
+| `draft` | Visible only via `admin list` and `admin preview`. Users cannot register. |
+| `open` | Users can register. Shown in `hackathon list`. Only one hackathon should be open at a time. |
+| `closed` | Registrations are closed. Still visible in `hackathon list`. |
+| `archived` | Hidden from `hackathon list`. Only visible via `admin list`. |
 
 ---
 

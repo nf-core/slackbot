@@ -37,8 +37,8 @@ class TestNoHackathon:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_active_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.attendees.get_active_form",
+            lambda: None,
         )
 
         await handle_attendees(ack, respond, client, _body(), [])
@@ -50,8 +50,8 @@ class TestNoHackathon:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_hackathon",
-            AsyncMock(return_value=None),
+            "nf_core_bot.commands.hackathon.attendees.get_form_metadata",
+            lambda hid: None,
         )
 
         await handle_attendees(ack, respond, client, _body(), ["no-such"])
@@ -68,8 +68,8 @@ class TestPermissions:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "Test"}),
+            "nf_core_bot.commands.hackathon.attendees.get_active_form",
+            lambda: {"hackathon_id": "h1", "title": "Test"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.attendees.is_core_team",
@@ -98,8 +98,8 @@ class TestCoreTeamView:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "March 2026"}),
+            "nf_core_bot.commands.hackathon.attendees.get_active_form",
+            lambda: {"hackathon_id": "h1", "title": "March 2026"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.attendees.is_core_team",
@@ -154,8 +154,8 @@ class TestOrganiserView:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_active_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "March 2026"}),
+            "nf_core_bot.commands.hackathon.attendees.get_active_form",
+            lambda: {"hackathon_id": "h1", "title": "March 2026"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.attendees.is_core_team",
@@ -212,8 +212,8 @@ class TestExplicitHackathonId:
         self, ack: AsyncMock, respond: AsyncMock, client: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.attendees.get_hackathon",
-            AsyncMock(return_value={"hackathon_id": "h1", "title": "March 2026"}),
+            "nf_core_bot.commands.hackathon.attendees.get_form_metadata",
+            lambda hid: {"hackathon_id": "h1", "title": "March 2026"},
         )
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.attendees.is_core_team",

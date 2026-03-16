@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from nf_core_bot.db.hackathons import get_active_hackathon, get_hackathon
 from nf_core_bot.db.registrations import list_registrations, list_registrations_by_site
 from nf_core_bot.db.sites import list_sites
+from nf_core_bot.forms.loader import get_active_form, get_form_metadata
 from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site, is_site_organiser
 
 if TYPE_CHECKING:
@@ -74,7 +74,7 @@ async def handle_attendees(
     if rest:
         hackathon_id = rest[0]
         try:
-            hackathon = await get_hackathon(hackathon_id)
+            hackathon = get_form_metadata(hackathon_id)
         except Exception:
             logger.exception("Failed to look up hackathon '%s'.", hackathon_id)
             await respond(
@@ -91,7 +91,7 @@ async def handle_attendees(
             return
     else:
         try:
-            hackathon = await get_active_hackathon()
+            hackathon = get_active_form()
         except Exception:
             logger.exception("Failed to look up active hackathon.")
             await respond(

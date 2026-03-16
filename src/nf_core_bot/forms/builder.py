@@ -194,6 +194,7 @@ async def build_modal_view(
     hackathon_id: str,
     answers: dict[str, Any] | None = None,
     sites: list[dict[str, str]] | None = None,
+    preview: bool = False,
 ) -> dict[str, Any]:
     """Build a Slack Block Kit modal view dict for a single form step.
 
@@ -212,6 +213,9 @@ async def build_modal_view(
         transfer between steps.
     sites:
         DynamoDB site records for ``options_from: sites`` fields.
+    preview:
+        When ``True``, the ``preview`` flag is included in
+        ``private_metadata`` so the submission handler skips persistence.
 
     Returns
     -------
@@ -235,14 +239,14 @@ async def build_modal_view(
         blocks = [_build_input_block(f, sites=sites, answers=answers) for f in step.fields]
 
     # ── Private metadata ────────────────────────────────────────────
-    metadata = json.dumps(
-        {
-            "hackathon_id": hackathon_id,
-            "step_index": step_index,
-            "answers": answers,
-        },
-        separators=(",", ":"),  # compact encoding
-    )
+    meta_dict: dict[str, Any] = {
+        "hackathon_id": hackathon_id,
+        "step_index": step_index,
+        "answers": answers,
+    }
+    if preview:
+        meta_dict["preview"] = True
+    metadata = json.dumps(meta_dict, separators=(",", ":"))  # compact encoding
 
     # Slack limits private_metadata to 3000 characters.
     if len(metadata) > 3000:

@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nf-core/slackbot/schemas/hackathon-form.schema.json",
+  "title": "nf-core Hackathon Form Definition",
+  "description": "Schema for hackathon registration form YAML files used by the nf-core Slack bot. Each YAML file defines one hackathon event with its metadata and multi-step registration form.",
+  "type": "object",
+  "required": ["hackathon", "title", "status", "channel", "url", "date_start", "date_end", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "hackathon": {
+      "type": "string",
+      "description": "Unique hackathon identifier slug (lowercase letters, digits, and hyphens). Used as the primary key in DynamoDB and the YAML filename.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "examples": ["2026-march", "2025-october"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable display title for the hackathon event, shown in Slack modals and messages.",
+      "examples": ["nf-core Hackathon — March 2026"]
+    },
+    "status": {
+      "type": "string",
+      "description": "Current lifecycle status of the hackathon. Only one hackathon should be 'open' at a time.\n\n- draft: form is being prepared, not visible to users\n- open: registration is active and accepting submissions\n- closed: registration has ended, data is still accessible\n- archived: hackathon is fully complete and archived",
+      "enum": ["draft", "open", "closed", "archived"]
+    },
+    "channel": {
+      "type": "string",
+      "description": "Slack channel for the hackathon — either a full Slack archive URL or a raw channel ID (starting with C).",
+      "anyOf": [
+        {
+          "pattern": "^https://[a-z]+\\.slack\\.com/archives/[A-Z0-9]+$",
+          "description": "Slack channel archive URL (e.g. https://nfcore.slack.com/archives/C0ACF0TPF5E)"
+        },
+        {
+          "pattern": "^C[A-Z0-9]+$",
+          "description": "Raw Slack channel ID (e.g. C0ACF0TPF5E)"
+        }
+      ],
+      "examples": ["https://nfcore.slack.com/archives/C0ACF0TPF5E", "C0ACF0TPF5E"]
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Public URL with more information about the hackathon event (typically an nf-co.re event page).",
+      "examples": ["https://nf-co.re/events/2026/hackathon-march-2026"]
+    },
+    "date_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Start date of the hackathon in ISO 8601 format (YYYY-MM-DD).",
+      "examples": ["2026-03-11"]
+    },
+    "date_end": {
+      "type": "string",
+      "format": "date",
+      "description": "End date of the hackathon in ISO 8601 format (YYYY-MM-DD).",
+      "examples": ["2026-03-13"]
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of registration form steps. Each step becomes a separate Slack modal view. Steps can be statements (informational text) or forms (with input fields).",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "step": {
+      "description": "A single step in the multi-step registration form. Either a statement (text only) or a form (with input fields).",
+      "type": "object",
+      "required": ["id", "title"],
+      "oneOf": [
+        { "$ref": "#/$defs/statementStep" },
+        { "$ref": "#/$defs/formStep" }
+      ]
+    },
+    "statementStep": {
+      "description": "An informational step that displays text to the user without collecting any input.",
+      "type": "object",
+      "required": ["id", "title", "type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this step, used for internal tracking and condition references."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title displayed at the top of the Slack modal for this step."
+        },
+        "type": {
+          "type": "string",
+          "const": "statement",
+          "description": "Step type — must be 'statement' for informational text steps."
+        },
+        "text": {
+          "type": "string",
+          "description": "Markdown-formatted text displayed to the user. Supports Slack mrkdwn syntax."
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "formStep": {
+      "description": "A form step that collects user input through one or more fields.",
+      "type": "object",
+      "required": ["id", "title", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this step, used for internal tracking and condition references."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title displayed at the top of the Slack modal for this step."
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Ordered list of input fields displayed in this form step.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "description": "Optional condition that controls whether this step is shown. The step is displayed only when the user's answer to the referenced field matches the expected value.",
+      "required": ["field", "equals"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "The field ID from a previous step whose answer is checked."
+        },
+        "equals": {
+          "type": "string",
+          "description": "The expected value that the referenced field must match for this step to be shown."
+        }
+      }
+    },
+    "field": {
+      "description": "A single input field within a form step. The available properties depend on the field type.",
+      "type": "object",
+      "required": ["id", "type", "label"],
+      "allOf": [
+        {
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique identifier for this field, used as the key when storing the user's answer."
+            },
+            "type": {
+              "type": "string",
+              "description": "The input type for this field.\n\n- text: single or multi-line text input\n- static_select: dropdown menu with predefined options\n- checkboxes: one or more checkboxes the user can toggle",
+              "enum": ["text", "static_select", "checkboxes"]
+            },
+            "label": {
+              "type": "string",
+              "description": "Label text displayed above the input field in the Slack modal."
+            },
+            "required": {
+              "type": "boolean",
+              "description": "Whether this field must be filled in before the user can proceed. Defaults to false.",
+              "default": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "text" } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "required": true,
+              "multiline": {
+                "type": "boolean",
+                "description": "If true, renders a multi-line textarea instead of a single-line text input. Only valid for type 'text'.",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "static_select" } },
+            "required": ["type"]
+          },
+          "then": {
+            "oneOf": [
+              {
+                "properties": {
+                  "id": true,
+                  "type": true,
+                  "label": true,
+                  "required": true,
+                  "options": {
+                    "type": "array",
+                    "description": "Inline list of options for this dropdown. Use this OR options_from, not both.",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/option" }
+                  }
+                },
+                "required": ["options"],
+                "additionalProperties": false
+              },
+              {
+                "properties": {
+                  "id": true,
+                  "type": true,
+                  "label": true,
+                  "required": true,
+                  "options_from": {
+                    "type": "string",
+                    "description": "Dynamic option source. Options are populated at runtime from the specified data source.\n\n- sites: hackathon local sites from DynamoDB\n- countries: ISO 3166-1 country list",
+                    "enum": ["sites", "countries"]
+                  }
+                },
+                "required": ["options_from"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "checkboxes" } },
+            "required": ["type"]
+          },
+          "then": {
+            "oneOf": [
+              {
+                "properties": {
+                  "id": true,
+                  "type": true,
+                  "label": true,
+                  "required": true,
+                  "options": {
+                    "type": "array",
+                    "description": "Inline list of options for these checkboxes. Use this OR options_from, not both.",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/option" }
+                  }
+                },
+                "required": ["options"],
+                "additionalProperties": false
+              },
+              {
+                "properties": {
+                  "id": true,
+                  "type": true,
+                  "label": true,
+                  "required": true,
+                  "options_from": {
+                    "type": "string",
+                    "description": "Dynamic option source. Options are populated at runtime from the specified data source.\n\n- sites: hackathon local sites from DynamoDB\n- countries: ISO 3166-1 country list",
+                    "enum": ["sites", "countries"]
+                  }
+                },
+                "required": ["options_from"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "option": {
+      "type": "object",
+      "description": "A selectable option for static_select or checkboxes fields.",
+      "required": ["label", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display text shown to the user for this option."
+        },
+        "value": {
+          "type": "string",
+          "description": "Machine-readable value stored when this option is selected."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional help text displayed below the option label."
+        }
+      }
+    }
+  }
+}

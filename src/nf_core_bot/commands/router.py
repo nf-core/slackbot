@@ -13,12 +13,9 @@ from nf_core_bot.commands.github.add_member import handle_add_member
 from nf_core_bot.commands.hackathon.admin import (
     handle_admin_add_organiser,
     handle_admin_add_site,
-    handle_admin_archive,
-    handle_admin_close,
-    handle_admin_create,
     handle_admin_list,
     handle_admin_list_sites,
-    handle_admin_open,
+    handle_admin_preview,
     handle_admin_remove_organiser,
     handle_admin_remove_site,
 )
@@ -56,11 +53,8 @@ def _parse_subcommand(text: str) -> tuple[str, list[str]]:
 # ── Admin subcommand dispatch table ─────────────────────────────────
 
 _ADMIN_DISPATCH: dict[str, object] = {
-    "create": handle_admin_create,
-    "open": handle_admin_open,
-    "close": handle_admin_close,
-    "archive": handle_admin_archive,
     "list": handle_admin_list,
+    "preview": handle_admin_preview,
     "add-site": handle_admin_add_site,
     "remove-site": handle_admin_remove_site,
     "list-sites": handle_admin_list_sites,
@@ -140,7 +134,7 @@ async def _route_hackathon(
     elif sub == "attendees":
         await handle_attendees(ack, respond, client, body, rest)
     elif sub == "admin":
-        await _route_admin(ack, respond, rest)
+        await _route_admin(ack, respond, client, body, rest)
     else:
         await ack()
         await respond(
@@ -152,6 +146,8 @@ async def _route_hackathon(
 async def _route_admin(
     ack: Ack,
     respond: Respond,
+    client: AsyncWebClient,
+    body: dict[str, str],
     tokens: list[str],
 ) -> None:
     """Dispatch ``/nf-core-bot hackathon admin <sub> [args…]``."""
@@ -175,9 +171,11 @@ async def _route_admin(
         )
         return
 
-    # ``handle_admin_list`` takes no extra args; the rest accept a list.
+    # Dispatch: handlers have varying signatures.
     if sub == "list":
         await handler(ack, respond)  # type: ignore[operator]
+    elif sub == "preview":
+        await handler(ack, respond, client, body, rest)  # type: ignore[operator]
     else:
         await handler(ack, respond, rest)  # type: ignore[operator]
 

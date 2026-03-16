@@ -18,7 +18,7 @@ The CDK stack (`NfCoreBotStack`) creates and manages:
 | Resource | Details |
 |---|---|
 | **VPC** | Public subnets only (2 AZs), no NAT gateway |
-| **DynamoDB Table** | `nf-core-bot`, PK/SK + GSI1, on-demand billing |
+| **DynamoDB Table** | `nf-core-bot`, PK/SK + GSI1, on-demand billing (sites, organisers, registrations only — hackathon metadata is in YAML files) |
 | **ECS Cluster** | `nf-core-bot` |
 | **ECS Fargate Service** | 1 task, 0.25 vCPU, 512 MB, public IP |
 | **CloudWatch Log Group** | `/ecs/nf-core-bot` |
@@ -30,7 +30,7 @@ Secrets are stored in **SSM Parameter Store** (managed manually, not by CDK).
 
 ## Day-to-Day Workflow
 
-**To deploy a change:** push to `main` (or merge a PR). That's it.
+**To deploy a change:** push to `main` (or merge a PR). That's it. This includes hackathon lifecycle changes — editing a YAML file's `status` field and pushing is how you open, close, or archive a hackathon.
 
 The GitHub Actions workflow (`.github/workflows/deploy.yml`) will:
 

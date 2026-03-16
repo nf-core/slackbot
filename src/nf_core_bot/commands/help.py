@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nf_core_bot.db.hackathons import get_active_hackathon
+from nf_core_bot.forms.loader import get_active_form
 from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site
 
 if TYPE_CHECKING:
@@ -22,11 +22,8 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("hackathon edit", "Edit your registration", "all"),
     ("hackathon cancel", "Cancel your registration", "all"),
     ("hackathon attendees [hackathon-id]", "List attendees (optionally by site)", "organiser"),
-    ("hackathon admin create <hackathon-id> <title>", "Create a new hackathon", "admin"),
-    ("hackathon admin open <hackathon-id>", "Open registration", "admin"),
-    ("hackathon admin close <hackathon-id>", "Close registration", "admin"),
-    ("hackathon admin archive <hackathon-id>", "Archive a hackathon", "admin"),
     ("hackathon admin list", "List all hackathons", "admin"),
+    ("hackathon admin preview <hackathon-id>", "Preview the registration form", "admin"),
     ("hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>", "Add a local site", "admin"),
     ("hackathon admin remove-site <hackathon-id> <site-id>", "Remove a local site", "admin"),
     ("hackathon admin list-sites <hackathon-id>", "List sites for a hackathon", "admin"),
@@ -98,7 +95,7 @@ async def handle_hackathon_help(
     organiser = admin
     if not organiser:
         try:
-            active = await get_active_hackathon()
+            active = get_active_form()
             if active:
                 organiser = await is_organiser_any_site(user_id, active["hackathon_id"])
         except Exception:
