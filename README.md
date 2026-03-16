@@ -1,8 +1,10 @@
 # nf-core-bot
 
-A Slack bot for the nf-core community — hackathon registration and GitHub organisation tooling.
+A Slack bot for the nf-core community — hackathon registration and GitHub
+organisation tooling.
 
-Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on AWS ECS Fargate + DynamoDB.
+Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on
+AWS ECS Fargate + DynamoDB.
 
 ## Commands
 
@@ -26,30 +28,35 @@ Two slash commands:
 /hackathon admin edit-site             # Edit a site (admin, opens modal)
 ```
 
-You can also right-click any message → **More actions** → **Add to GitHub org** to invite the message author.
+You can also right-click any message → **More actions** → **Add to GitHub org**
+to invite the message author.
 
-All responses are **ephemeral** (only visible to you), except `github add-member` which posts visible thread replies.
+All responses are **ephemeral** (only visible to you), except
+`github add-member` which posts visible thread replies.
 
 See [docs/commands.md](docs/commands.md) for the full command reference.
 
 ## Hackathon Form Configuration
 
-Each hackathon has a YAML file in `hackathons/` containing metadata and form steps. A JSON schema at `schemas/hackathon-form.schema.json` provides validation and VS Code IntelliSense via the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
+Each hackathon has a YAML file in `hackathons/` containing metadata and form
+steps. A JSON schema at `schemas/hackathon-form.schema.json` provides validation
+and VS Code IntelliSense via the
+[Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
 
 See `hackathons/2026-march.yaml` for a full working example.
 
 ### Metadata fields
 
-| Field | Description |
-|-------|-------------|
-| `hackathon` | Unique ID (e.g. `2026-march`). Must match filename: `hackathons/<id>.yaml` |
-| `title` | Display title shown in modals and listings |
-| `status` | `draft` / `open` / `closed` / `archived` |
-| `channel` | Slack channel URL or ID. Users are auto-joined on registration |
-| `url` | Event page URL |
-| `date_start` | Start date (`YYYY-MM-DD`) |
-| `date_end` | End date (`YYYY-MM-DD`) |
-| `steps` | List of form steps |
+| Field        | Description                                                                |
+| ------------ | -------------------------------------------------------------------------- |
+| `hackathon`  | Unique ID (e.g. `2026-march`). Must match filename: `hackathons/<id>.yaml` |
+| `title`      | Display title shown in modals and listings                                 |
+| `status`     | `draft` / `open` / `closed` / `archived`                                   |
+| `channel`    | Slack channel URL or ID. Users are auto-joined on registration             |
+| `url`        | Event page URL                                                             |
+| `date_start` | Start date (`YYYY-MM-DD`)                                                  |
+| `date_end`   | End date (`YYYY-MM-DD`)                                                    |
+| `steps`      | List of form steps                                                         |
 
 ### Field types
 
@@ -58,7 +65,8 @@ See `hackathons/2026-march.yaml` for a full working example.
 - `multi_static_select` — multi-select dropdown
 - `checkboxes` — checkbox group
 - `radio_buttons` — radio button group
-- `type: statement` on a step — informational screen (no input fields), uses `text:` for the message
+- `type: statement` on a step — informational screen (no input fields), uses
+  `text:` for the message
 
 ### Dynamic options
 
@@ -81,20 +89,22 @@ Steps can have a `condition` field to show/hide based on a previous answer:
 
 The mode is determined by how you author the YAML — no special field needed:
 
-| Mode | How to configure |
-|------|-----------------|
-| **Hybrid** (sites + online) | Add an `attend_local_site` yes/no field with conditional steps for site selection and online details. See `2026-march.yaml`. |
-| **In-person only** (multi-site) | Include a `local_site` field with `options_from: sites`, no attendance mode question. |
-| **Online only** | No `local_site` field, no site selection step. |
-| **Single-location in-person** | Same as online only — no site selection. Describe the venue in the welcome text. |
+| Mode                            | How to configure                                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Hybrid** (sites + online)     | Add an `attend_local_site` yes/no field with conditional steps for site selection and online details. See `2026-march.yaml`. |
+| **In-person only** (multi-site) | Include a `local_site` field with `options_from: sites`, no attendance mode question.                                        |
+| **Online only**                 | No `local_site` field, no site selection step.                                                                               |
+| **Single-location in-person**   | Same as online only — no site selection. Describe the venue in the welcome text.                                             |
 
 ## Admin Workflow
 
-Hackathon lifecycle is managed through YAML files and git — no slash commands needed for creation or status changes.
+Hackathon lifecycle is managed through YAML files and git — no slash commands
+needed for creation or status changes.
 
 1. **Create YAML** — copy `hackathons/2026-march.yaml`, set `status: draft`
 2. **Push to `main`** — auto-deploys, bot picks up the new file
-3. **Preview** — `/hackathon admin preview` opens the form in preview mode (no data saved)
+3. **Preview** — `/hackathon admin preview` opens the form in preview mode (no
+   data saved)
 4. **Add sites** — `/hackathon admin add-site` (modal form with organisers)
 5. **Open** — change `status: open`, commit, push
 6. **Monitor** — `/hackathon sites` for counts, `/hackathon export` for CSV
@@ -117,4 +127,5 @@ ruff check src/ tests/         # Lint
 mypy src/                      # Type check
 ```
 
-See also: [Slack App Setup](docs/slack-app-setup.md) · [Command Reference](docs/commands.md) · [Deployment](docs/deployment.md)
+See also: [Slack App Setup](docs/slack-app-setup.md) ·
+[Command Reference](docs/commands.md) · [Deployment](docs/deployment.md)

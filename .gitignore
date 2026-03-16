@@ -10,6 +10,7 @@ build/
 .ruff_cache/
 .env
 .venv/
+node_modules/
 
 # CDK
 infra/cdk.out/
