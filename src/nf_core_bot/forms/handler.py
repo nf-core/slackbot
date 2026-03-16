@@ -231,10 +231,16 @@ async def handle_registration_step(
         # Final step — close the modal.
         await ack(response_action="clear")
         if preview:
-            # Preview mode — no persistence, show collected answers.
+            # Preview mode — no persistence, show collected answers
+            # including auto-populated profile fields.
             try:
+                profile_data = await _get_profile_data(client, user_id)
                 lines = [":eyes: *Preview complete* — no registration was saved.\n"]
-                lines.append("*Submitted answers:*")
+                lines.append("*Auto-populated from Slack profile:*")
+                for key, value in sorted(profile_data.items()):
+                    display = str(value) if value else "_(empty)_"
+                    lines.append(f"• *{key}*: {display}")
+                lines.append("\n*Submitted answers:*")
                 for key, value in sorted(answers.items()):
                     if isinstance(value, list):
                         display = ", ".join(str(v) for v in value)
