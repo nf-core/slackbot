@@ -66,49 +66,19 @@ class TestAdminDispatchTypes:
         assert len(args) == 5  # ack, respond, client, body, args_list
         assert isinstance(args[4], list)  # args is a list
 
-    async def test_admin_remove_site_receives_args_list(self, monkeypatch):
+    async def test_admin_edit_site_receives_ack_respond_client_body_args(self, monkeypatch):
         mock = AsyncMock()
-        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "remove-site", mock)
-        await dispatch(
-            AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin remove-site 2026-march barcelona")
-        )
-        mock.assert_awaited_once()
-        args = mock.call_args[0]
-        assert isinstance(args[2], list)
-
-    async def test_admin_list_sites_receives_args_list(self, monkeypatch):
-        mock = AsyncMock()
-        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list-sites", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon admin list-sites 2026-march"))
-        mock.assert_awaited_once()
-        args = mock.call_args[0]
-        assert isinstance(args[2], list)
-
-    async def test_admin_add_organiser_receives_args_list(self, monkeypatch):
-        mock = AsyncMock()
-        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "add-organiser", mock)
+        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "edit-site", mock)
         await dispatch(
             AsyncMock(),
             AsyncMock(),
             AsyncMock(),
-            _command("hackathon admin add-organiser 2026-march barcelona <@U123>"),
+            _command("hackathon admin edit-site 2026-march barcelona"),
         )
         mock.assert_awaited_once()
         args = mock.call_args[0]
-        assert isinstance(args[2], list)
-
-    async def test_admin_remove_organiser_receives_args_list(self, monkeypatch):
-        mock = AsyncMock()
-        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "remove-organiser", mock)
-        await dispatch(
-            AsyncMock(),
-            AsyncMock(),
-            AsyncMock(),
-            _command("hackathon admin remove-organiser 2026-march barcelona <@U123>"),
-        )
-        mock.assert_awaited_once()
-        args = mock.call_args[0]
-        assert isinstance(args[2], list)
+        assert len(args) == 5  # ack, respond, client, body, args_list
+        assert isinstance(args[4], list)
 
 
 # ── Admin dispatch — argument values ────────────────────────────────
@@ -259,21 +229,4 @@ class TestHackathonAliases:
         mock = AsyncMock()
         monkeypatch.setitem(router_mod._ADMIN_DISPATCH, "list", mock)
         await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"{alias} admin list"))
-        mock.assert_awaited_once()
-
-
-class TestOrganizerSpellingAliases:
-    """Verify that US 'organizer' spelling routes to UK 'organiser' handlers."""
-
-    @pytest.mark.parametrize(
-        "us_cmd,uk_cmd",
-        [
-            ("add-organizer", "add-organiser"),
-            ("remove-organizer", "remove-organiser"),
-        ],
-    )
-    async def test_us_spelling_dispatches_to_uk_handler(self, us_cmd: str, uk_cmd: str, monkeypatch):
-        mock = AsyncMock()
-        monkeypatch.setitem(router_mod._ADMIN_DISPATCH, uk_cmd, mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command(f"hackathon admin {us_cmd} U123"))
         mock.assert_awaited_once()

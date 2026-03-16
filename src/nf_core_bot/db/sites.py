@@ -96,6 +96,42 @@ async def remove_site(hackathon_id: str, site_id: str) -> None:
     logger.info("Removed site '%s' from hackathon '%s'.", site_id, hackathon_id)
 
 
+async def update_site(
+    hackathon_id: str,
+    site_id: str,
+    name: str,
+    city: str,
+    country: str,
+) -> None:
+    """Update an existing site's metadata.
+
+    Raises :class:`ValueError` if the site does not exist.
+    """
+    table = get_table()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
+
+    def _update() -> None:
+        table.update_item(
+            Key={"PK": _pk(hackathon_id), "SK": _site_sk(site_id)},
+            UpdateExpression="SET #n = :n, city = :c, country = :co, updated_at = :u",
+            ExpressionAttributeNames={"#n": "name"},
+            ExpressionAttributeValues={
+                ":n": name,
+                ":c": city,
+                ":co": country,
+                ":u": now,
+            },
+            ConditionExpression=Attr("PK").exists(),
+        )
+
+    try:
+        await asyncio.to_thread(_update)
+    except table.meta.client.exceptions.ConditionalCheckFailedException:
+        raise ValueError(f"Site '{site_id}' not found in hackathon '{hackathon_id}'") from None
+
+    logger.info("Updated site '%s' in hackathon '%s'.", site_id, hackathon_id)
+
+
 async def get_site(hackathon_id: str, site_id: str) -> dict[str, Any] | None:
     """Return site metadata, or ``None`` if not found."""
     table = get_table()

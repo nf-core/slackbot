@@ -11,13 +11,11 @@ from typing import TYPE_CHECKING
 
 from nf_core_bot.commands.github.add_member import handle_add_member
 from nf_core_bot.commands.hackathon.admin import (
-    handle_admin_add_organiser,
     handle_admin_add_site,
+    handle_admin_edit_site,
     handle_admin_list,
     handle_admin_list_sites,
     handle_admin_preview,
-    handle_admin_remove_organiser,
-    handle_admin_remove_site,
 )
 from nf_core_bot.commands.hackathon.attendees import handle_attendees
 from nf_core_bot.commands.hackathon.list_cmd import handle_list
@@ -56,9 +54,7 @@ _ADMIN_DISPATCH: dict[str, object] = {
     "list": handle_admin_list,
     "preview": handle_admin_preview,
     "add-site": handle_admin_add_site,
-    "remove-site": handle_admin_remove_site,
-    "add-organiser": handle_admin_add_organiser,
-    "remove-organiser": handle_admin_remove_organiser,
+    "edit-site": handle_admin_edit_site,
 }
 
 
@@ -163,9 +159,6 @@ async def _route_admin(
     sub = tokens[0].lower()
     rest = tokens[1:]
 
-    # Normalise US spelling → UK spelling for organiser commands.
-    sub = sub.replace("organizer", "organiser")
-
     handler = _ADMIN_DISPATCH.get(sub)
     if handler is None:
         await ack()
@@ -178,10 +171,8 @@ async def _route_admin(
     # Dispatch: handlers have varying signatures.
     if sub == "list":
         await handler(ack, respond)  # type: ignore[operator]
-    elif sub in ("preview", "add-site"):
-        await handler(ack, respond, client, body, rest)  # type: ignore[operator]
     else:
-        await handler(ack, respond, rest)  # type: ignore[operator]
+        await handler(ack, respond, client, body, rest)  # type: ignore[operator]
 
 
 # ── GitHub dispatch ──────────────────────────────────────────────────
