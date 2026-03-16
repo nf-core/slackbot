@@ -280,7 +280,22 @@ async def build_modal_view(
                     "text": {"type": "mrkdwn", "text": step.text},
                 }
             )
-        blocks.extend(_build_input_block(f, sites=sites, answers=answers) for f in step.fields)
+        for f in step.fields:
+            blocks.append(_build_input_block(f, sites=sites, answers=answers))
+            # After the last_name field, inject a read-only profile info block.
+            if f.id == "last_name" and (answers.get("_email") or answers.get("_github_username")):
+                info_parts: list[str] = []
+                if answers.get("_email"):
+                    info_parts.append(f"*Email:* {answers['_email']}")
+                if answers.get("_github_username"):
+                    info_parts.append(f"*GitHub:* {answers['_github_username']}")
+                info_parts.append("_Edit your Slack profile to change these._")
+                blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [{"type": "mrkdwn", "text": "  ".join(info_parts)}],
+                    }
+                )
 
     # ── Private metadata ────────────────────────────────────────────
     meta_dict: dict[str, Any] = {

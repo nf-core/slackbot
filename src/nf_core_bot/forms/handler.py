@@ -319,7 +319,7 @@ async def _finalise_registration(
     # The site ID comes from the ``local_site`` form field (if attending
     # in person).  All other answers are stored as ``form_data``.
     site_id: str | None = answers.get("local_site")
-    form_data = {k: v for k, v in answers.items() if k != "local_site"}
+    form_data = {k: v for k, v in answers.items() if k != "local_site" and not k.startswith("_")}
 
     # ── Persist ─────────────────────────────────────────────────────
     try:
@@ -397,18 +397,21 @@ async def open_registration_modal(
     """
     answers: dict[str, Any] = existing_data or {}
 
-    # ── Pre-fill name fields from Slack profile ─────────────────────
-    # The user can always override these in the form.
-    if "first_name" not in answers or "last_name" not in answers:
-        try:
-            profile_resp = await client.users_profile_get(user=user_id)
-            profile: dict[str, Any] = profile_resp.get("profile", {})
-            if "first_name" not in answers:
-                answers.setdefault("first_name", profile.get("first_name") or "")
-            if "last_name" not in answers:
-                answers.setdefault("last_name", profile.get("last_name") or "")
-        except Exception:
-            logger.debug("Could not pre-fill name from Slack profile for user %s.", user_id)
+    # ── Pre-fill from Slack profile ────────────────────────────────
+    # Names are editable; email and GitHub are shown read-only.
+    try:
+        profile_resp = await client.users_profile_get(user=user_id)
+        profile: dict[str, Any] = profile_resp.get("profile", {})
+        if "first_name" not in answers:
+            answers.setdefault("first_name", profile.get("first_name") or "")
+        if "last_name" not in answers:
+            answers.setdefault("last_name", profile.get("last_name") or "")
+        # Store profile fields for read-only display (prefixed with _).
+        answers["_email"] = profile.get("email") or ""
+        github = await get_github_username(client, user_id)
+        answers["_github_username"] = github or ""
+    except Exception:
+        logger.debug("Could not pre-fill from Slack profile for user %s.", user_id)
 
     # ── Load form definition ────────────────────────────────────────
     try:
