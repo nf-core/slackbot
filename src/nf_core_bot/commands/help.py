@@ -21,10 +21,10 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("register", "Register for the active hackathon", "all"),
     ("edit", "Edit your registration", "all"),
     ("cancel", "Cancel your registration", "all"),
-    ("sites [hackathon-id]", "List sites, organisers, and registration counts", "all"),
-    ("export [hackathon-id]", "Export all registrations as CSV", "organiser"),
+    ("sites", "List sites, organisers, and registration counts", "all"),
+    ("export", "Export all registrations as CSV", "organiser"),
     ("admin list", "List all hackathons (incl. draft/archived)", "admin"),
-    ("admin preview [hackathon-id]", "Preview the registration form", "admin"),
+    ("admin preview", "Preview the registration form", "admin"),
     ("admin add-site", "Add a new site (opens a form)", "admin"),
     ("admin edit-site", "Edit a site (opens a form)", "admin"),
 ]

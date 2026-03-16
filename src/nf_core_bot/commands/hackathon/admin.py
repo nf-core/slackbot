@@ -765,8 +765,13 @@ async def handle_export(
 
     # ── Upload CSV as file via DM ───────────────────────────────────
     try:
+        # Open (or retrieve) a DM conversation with the user first —
+        # files_upload_v2 needs a real channel ID, not a user ID.
+        dm = await client.conversations_open(users=[user_id])
+        dm_channel = dm["channel"]["id"]
+
         await client.files_upload_v2(
-            channel=user_id,
+            channel=dm_channel,
             content=csv_content,
             filename=f"{hackathon_id}-registrations.csv",
             title=f"Registrations for {hackathon['title']}",
