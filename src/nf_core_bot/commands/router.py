@@ -110,6 +110,8 @@ async def _route_hackathon(
         return
 
     sub = tokens[0].lower()
+    if sub in ("a", "adm"):
+        sub = "admin"
     rest = tokens[1:]
 
     # Build a body dict that handlers expect for trigger_id / user_id.
