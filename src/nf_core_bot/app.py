@@ -16,7 +16,11 @@ from slack_bolt.app.async_app import AsyncApp
 
 from nf_core_bot import config
 from nf_core_bot.commands.github.add_member_shortcut import handle_add_member_shortcut
-from nf_core_bot.commands.hackathon.admin import handle_admin_delete_site, handle_admin_site_submission
+from nf_core_bot.commands.hackathon.admin import (
+    handle_admin_delete_site,
+    handle_admin_edit_site_picker,
+    handle_admin_site_submission,
+)
 from nf_core_bot.commands.router import dispatch
 from nf_core_bot.db import client as db_client
 from nf_core_bot.forms.handler import (
@@ -60,6 +64,12 @@ async def on_registration_step(ack, body, client, view):  # type: ignore[no-unty
 
 
 # ── Admin modal callbacks ────────────────────────────────────────────
+
+
+@app.view("admin_edit_site_picker")
+async def on_admin_edit_site_picker(ack, body, client):  # type: ignore[no-untyped-def]
+    """Handle step-1 of edit-site: pick hackathon + site, then show edit form."""
+    await handle_admin_edit_site_picker(ack, body, client)
 
 
 @app.view("admin_site")

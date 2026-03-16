@@ -12,6 +12,7 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_add_site,
     handle_admin_delete_site,
     handle_admin_edit_site,
+    handle_admin_edit_site_picker,
     handle_admin_list,
     handle_admin_list_sites,
     handle_admin_preview,
@@ -259,13 +260,55 @@ class TestAdminAddSite:
 
 
 class TestAdminEditSite:
-    async def test_opens_modal_with_prefilled_data(
+    async def test_opens_picker_modal(
         self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
-            lambda hid: {"hackathon_id": hid} if hid == "h1" else None,
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [{"hackathon_id": "h1", "title": "Test"}],
         )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.get_active_form",
+            lambda: {"hackathon_id": "h1"},
+        )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.list_sites",
+            AsyncMock(return_value=[{"site_id": "s1", "name": "Site One", "city": "London"}]),
+        )
+        client = AsyncMock()
+        body: dict[str, str] = {"trigger_id": "T123"}
+
+        await handle_admin_edit_site(ack, respond, client, body, [])
+
+        ack.assert_awaited_once()
+        client.views_open.assert_awaited_once()
+        view = client.views_open.call_args.kwargs["view"]
+        assert view["callback_id"] == "admin_edit_site_picker"
+
+    async def test_no_sites_shows_error(
+        self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.list_all_forms",
+            lambda: [{"hackathon_id": "h1", "title": "Test"}],
+        )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.get_active_form",
+            lambda: {"hackathon_id": "h1"},
+        )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.list_sites",
+            AsyncMock(return_value=[]),
+        )
+        client = AsyncMock()
+        body: dict[str, str] = {"trigger_id": "T123"}
+
+        await handle_admin_edit_site(ack, respond, client, body, [])
+
+        ack.assert_awaited_once()
+        assert "No sites found" in respond.call_args.kwargs["text"]
+
+    async def test_picker_submission_loads_edit_form(self, ack: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "nf_core_bot.commands.hackathon.admin.get_site",
             AsyncMock(return_value={"site_id": "s1", "name": "Site One", "city": "London", "country": "uk"}),
@@ -279,45 +322,27 @@ class TestAdminEditSite:
             lambda: [{"hackathon_id": "h1", "title": "Test"}],
         )
         client = AsyncMock()
-        body: dict[str, str] = {"trigger_id": "T123"}
+        body = {
+            "user": {"id": "U123"},
+            "view": {
+                "state": {
+                    "values": {
+                        "hackathon": {"hackathon": {"selected_option": {"value": "h1"}}},
+                        "site": {"site": {"selected_option": {"value": "s1"}}},
+                    }
+                }
+            },
+        }
 
-        await handle_admin_edit_site(ack, respond, client, body, ["h1", "s1"])
+        await handle_admin_edit_site_picker(ack, body, client)
 
         ack.assert_awaited_once()
-        client.views_open.assert_awaited_once()
-        view = client.views_open.call_args.kwargs["view"]
+        # Should update the view to the edit form.
+        view = ack.call_args.kwargs["view"]
         assert view["callback_id"] == "admin_site"
         assert "Edit" in view["title"]["text"]
-        # Check private_metadata carries edit context.
         meta = json.loads(view["private_metadata"])
         assert meta["edit_site_id"] == "s1"
-
-    async def test_site_not_found(self, ack: AsyncMock, respond: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_form_metadata",
-            lambda hid: {"hackathon_id": hid} if hid == "h1" else None,
-        )
-        monkeypatch.setattr(
-            "nf_core_bot.commands.hackathon.admin.get_site",
-            AsyncMock(return_value=None),
-        )
-        client = AsyncMock()
-        body: dict[str, str] = {"trigger_id": "T123"}
-
-        await handle_admin_edit_site(ack, respond, client, body, ["h1", "s1"])
-
-        ack.assert_awaited_once()
-        assert "not found" in respond.call_args.kwargs["text"]
-
-    @pytest.mark.usefixtures("_patch_no_active")
-    async def test_missing_args(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        client = AsyncMock()
-        body: dict[str, str] = {"trigger_id": "T123"}
-
-        await handle_admin_edit_site(ack, respond, client, body, [])
-
-        ack.assert_awaited_once()
-        assert "Usage" in respond.call_args.kwargs["text"]
 
 
 # ── handle_admin_site_submission ─────────────────────────────────────

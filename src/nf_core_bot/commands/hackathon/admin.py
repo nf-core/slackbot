@@ -172,26 +172,121 @@ async def handle_admin_add_site(
 async def handle_admin_edit_site(
     ack: Ack, respond: Respond, client: AsyncWebClient, body: dict[str, str], args: list[str]
 ) -> None:
-    """Open a modal form to edit an existing site.
+    """Open a two-step modal to pick and edit a site.
 
-    Usage: ``/nf-core-bot hackathon admin edit-site [hackathon-id] <site-id>``
+    Step 1: pick hackathon + site from dropdowns.
+    Step 2: edit site details, organisers, or delete.
+
+    Usage: ``/nf-core-bot hackathon admin edit-site``
     """
     await ack()
 
-    hackathon_id, remaining = _resolve_hackathon_id(args)
-    if hackathon_id is None or not remaining:
+    all_forms = list_all_forms()
+    if not all_forms:
+        await respond(text="No hackathon forms found.", response_type="ephemeral")
+        return
+
+    active_form = get_active_form()
+    active_id = active_form["hackathon_id"] if active_form else None
+
+    # Pre-load sites for the active hackathon so the dropdown isn't empty.
+    sites: list[dict[str, Any]] = []
+    if active_id:
+        sites = await list_sites(active_id)
+
+    if not sites:
         await respond(
-            text=f"Usage: `/nf-core-bot hackathon admin edit-site [hackathon-id] <site-id>`\n{_NO_ACTIVE_MSG}",
+            text="No sites found. Use `/nf-core-bot hackathon admin add-site` first.",
             response_type="ephemeral",
         )
         return
 
-    site_id = remaining[0]
+    trigger_id = body.get("trigger_id", "")
+    view = _build_edit_site_picker(all_forms, sites, active_hackathon_id=active_id)
+
+    try:
+        await client.views_open(trigger_id=trigger_id, view=view)
+    except Exception:
+        logger.exception("Failed to open edit-site picker modal")
+        await respond(text="Failed to open edit-site picker.", response_type="ephemeral")
+
+
+def _build_edit_site_picker(
+    forms: list[dict[str, Any]],
+    sites: list[dict[str, Any]],
+    active_hackathon_id: str | None = None,
+) -> dict[str, Any]:
+    """Build step-1 modal: pick a hackathon and site to edit."""
+    # Hackathon dropdown.
+    hackathon_options = [
+        {
+            "text": {"type": "plain_text", "text": f"{f['title']} ({f['hackathon_id']})"},
+            "value": f["hackathon_id"],
+        }
+        for f in forms
+    ]
+    hackathon_element: dict[str, Any] = {
+        "type": "static_select",
+        "action_id": "hackathon",
+        "options": hackathon_options,
+    }
+    if active_hackathon_id:
+        for opt in hackathon_options:
+            if opt["value"] == active_hackathon_id:
+                hackathon_element["initial_option"] = opt
+                break
+
+    # Site dropdown.
+    site_options = [
+        {
+            "text": {"type": "plain_text", "text": f"{s.get('name', s.get('site_id', '?'))} ({s.get('city', '')})"},
+            "value": s.get("site_id", ""),
+        }
+        for s in sorted(sites, key=lambda s: s.get("name", ""))
+    ]
+    site_element: dict[str, Any] = {
+        "type": "static_select",
+        "action_id": "site",
+        "options": site_options,
+        "placeholder": {"type": "plain_text", "text": "Select a site to edit"},
+    }
+
+    return {
+        "type": "modal",
+        "callback_id": "admin_edit_site_picker",
+        "title": {"type": "plain_text", "text": "Edit Site"},
+        "submit": {"type": "plain_text", "text": "Next"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "hackathon",
+                "label": {"type": "plain_text", "text": "Hackathon"},
+                "element": hackathon_element,
+            },
+            {
+                "type": "input",
+                "block_id": "site",
+                "label": {"type": "plain_text", "text": "Site"},
+                "element": site_element,
+            },
+        ],
+    }
+
+
+async def handle_admin_edit_site_picker(ack: Any, body: dict[str, Any], client: AsyncWebClient) -> None:
+    """Handle step-1 submission: load site data and show the edit form."""
+    values = body["view"]["state"]["values"]
+    hackathon_opt = values["hackathon"]["hackathon"].get("selected_option")
+    hackathon_id = hackathon_opt["value"] if hackathon_opt else ""
+    site_opt = values["site"]["site"].get("selected_option")
+    site_id = site_opt["value"] if site_opt else ""
+
     site = await get_site(hackathon_id, site_id)
     if site is None:
-        await respond(
-            text=f"Site `{site_id}` not found in hackathon `{hackathon_id}`.",
-            response_type="ephemeral",
+        await ack(
+            response_action="errors",
+            errors={"site": f"Site '{site_id}' not found."},
         )
         return
 
@@ -199,7 +294,6 @@ async def handle_admin_edit_site(
     organisers = await list_organisers(hackathon_id, site_id)
     organiser_ids = [o.get("user_id", "") for o in organisers]
 
-    trigger_id = body.get("trigger_id", "")
     view = _build_site_modal(
         all_forms,
         active_hackathon_id=hackathon_id,
@@ -207,11 +301,7 @@ async def handle_admin_edit_site(
         organiser_ids=organiser_ids,
     )
 
-    try:
-        await client.views_open(trigger_id=trigger_id, view=view)
-    except Exception:
-        logger.exception("Failed to open edit-site modal")
-        await respond(text="Failed to open edit-site modal.", response_type="ephemeral")
+    await ack(response_action="update", view=view)
 
 
 def _build_site_modal(

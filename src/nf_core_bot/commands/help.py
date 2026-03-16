@@ -26,7 +26,7 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
     ("hackathon admin list", "List all hackathons (incl. draft/archived)", "admin"),
     ("hackathon admin preview [hackathon-id]", "Preview the registration form", "admin"),
     ("hackathon admin add-site", "Add a new site (opens a form)", "admin"),
-    ("hackathon admin edit-site [hackathon-id] <site-id>", "Edit a site (opens a form)", "admin"),
+    ("hackathon admin edit-site", "Edit a site (opens a form)", "admin"),
 ]
 
 GITHUB_COMMANDS: list[tuple[str, str, str]] = [
