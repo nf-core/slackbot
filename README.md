@@ -29,7 +29,7 @@ Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on AW
 
 ### Future Work
 
-- `/nf-core-bot community audit` — scan all Slack users for GitHub profile field
+- `/nf-core community audit` — scan all Slack users for GitHub profile field
 - Check nf-core org membership across the community
 - Check public org membership visibility
 - Scheduled reports / nudge DMs for missing info
@@ -85,35 +85,35 @@ Admin check: on every admin command, bot calls `usergroups.users.list` for the `
 
 ```bash
 # Help
-/nf-core-bot help
-/nf-core-bot hackathon help
-/nf-core-bot github help
+/nf-core help
+/nf-core hackathon help
+/nf-core github help
 
 # User commands
-/nf-core-bot hackathon list                      # List hackathons with dates, status, event URL
-/nf-core-bot hackathon register                   # Register for the active hackathon
-/nf-core-bot hackathon edit                       # Edit your registration
-/nf-core-bot hackathon cancel                     # Cancel your registration
+/nf-core hackathon list                      # List hackathons with dates, status, event URL
+/nf-core hackathon register                   # Register for the active hackathon
+/nf-core hackathon edit                       # Edit your registration
+/nf-core hackathon cancel                     # Cancel your registration
 
 # Organiser commands (site-scoped)
-/nf-core-bot hackathon attendees [hackathon-id]   # List attendees for your site(s)
+/nf-core hackathon attendees [hackathon-id]   # List attendees for your site(s)
 
 # Admin commands (@core-team only)
-/nf-core-bot hackathon admin list                  # All hackathons (including draft/archived)
-/nf-core-bot hackathon admin preview <hackathon-id> # Preview registration form (no data saved)
+/nf-core hackathon admin list                  # All hackathons (including draft/archived)
+/nf-core hackathon admin preview <hackathon-id> # Preview registration form (no data saved)
 
-/nf-core-bot hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
-/nf-core-bot hackathon admin remove-site <hackathon-id> <site-id>
-/nf-core-bot hackathon admin list-sites <hackathon-id>
+/nf-core hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
+/nf-core hackathon admin remove-site <hackathon-id> <site-id>
+/nf-core hackathon admin list-sites <hackathon-id>
 
-/nf-core-bot hackathon admin add-organiser <hackathon-id> <site-id> @user
-/nf-core-bot hackathon admin remove-organiser <hackathon-id> <site-id> @user
+/nf-core hackathon admin add-organiser <hackathon-id> <site-id> @user
+/nf-core hackathon admin remove-organiser <hackathon-id> <site-id> @user
 
-/nf-core-bot hackathon attendees [hackathon-id]   # Admin sees all sites
+/nf-core hackathon attendees [hackathon-id]   # Admin sees all sites
 
 # GitHub commands (@core-team only)
-/nf-core-bot github add-member @slack-user        # Invite a specific Slack user
-/nf-core-bot github add-member <github-username>  # Invite by GitHub username directly
+/nf-core github add-member @slack-user        # Invite a specific Slack user
+/nf-core github add-member <github-username>  # Invite by GitHub username directly
 # Message shortcut: right-click a message → More actions → "Add to GitHub org"
 ```
 
@@ -121,7 +121,7 @@ See [docs/commands.md](docs/commands.md) for full command reference with example
 
 **Notes:**
 
-- Slack allows only one slash command per app — `/nf-core-bot` is the entry point, everything else is parsed as subcommands
+- Slack allows only one slash command per app — `/nf-core` is the entry point, everything else is parsed as subcommands
 - Slack does not allow custom slash commands in threads — use the "Add to GitHub org" message shortcut instead
 - Hackathon lifecycle (create, open, close, archive) is managed by editing YAML files in `forms/` — not via slash commands
 - `hackathon register` targets the currently open hackathon (error if zero or multiple are open)
@@ -254,7 +254,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
 ## Registration Flow
 
 ```
-1. User: /nf-core-bot hackathon register
+1. User: /nf-core hackathon register
 
 2. Bot checks: is there exactly one hackathon YAML with status=open?
    ├─ None → ephemeral: "No hackathon is currently open for registration"
@@ -262,7 +262,7 @@ Each `step` becomes a Slack modal view. The bot uses `views.push` to advance thr
    └─ One → continue
 
 3. Bot checks: does a registration already exist for this user + hackathon?
-   ├─ Active → ephemeral: "You're already registered! Use `/nf-core-bot hackathon edit` to update"
+   ├─ Active → ephemeral: "You're already registered! Use `/nf-core hackathon edit` to update"
    ├─ Cancelled → allow re-registration
    └─ None → continue
 
@@ -289,11 +289,11 @@ Hackathon lifecycle is managed entirely through YAML files — no slash commands
 
 1. **Create the YAML file** — copy an existing form in `forms/` or start from the JSON schema. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new file.
-3. **Preview the form** — `/nf-core-bot hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
-4. **Add sites** — `/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
-5. **Add organisers** — `/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose`
+3. **Preview the form** — `/nf-core hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved)
+4. **Add sites** — `/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
+5. **Add organisers** — `/nf-core hackathon admin add-organiser 2026-march barcelona @jose`
 6. **Open registrations** — change `status: open` in the YAML, commit, push
-7. **Monitor** — `/nf-core-bot hackathon attendees`
+7. **Monitor** — `/nf-core hackathon attendees`
 8. **Close registrations** — change `status: closed` in the YAML, commit, push
 9. **Archive** — change `status: archived` to hide from `hackathon list`
 

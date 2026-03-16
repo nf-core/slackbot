@@ -1,6 +1,6 @@
-"""Parse the ``/nf-core-bot`` slash command text and dispatch to handlers.
+"""Parse the ``/nf-core`` slash command text and dispatch to handlers.
 
-The single slash command ``/nf-core-bot <subcommand> [args…]`` is split into
+The single slash command ``/nf-core <subcommand> [args…]`` is split into
 tokens here and routed to the appropriate handler module.
 """
 
@@ -64,9 +64,9 @@ async def dispatch(
     client: AsyncWebClient,
     command: dict[str, str],
 ) -> None:
-    """Route ``/nf-core-bot <text>`` to the correct handler.
+    """Route ``/nf-core <text>`` to the correct handler.
 
-    This is the single callback registered on the ``/nf-core-bot`` command
+    This is the single callback registered on the ``/nf-core`` command
     in ``app.py``.
     """
     raw_text: str = command.get("text", "").strip()
@@ -91,7 +91,7 @@ async def dispatch(
     # ── Unknown ──────────────────────────────────────────────────────
     await ack()
     await respond(
-        f"Unknown command: `{sub}`. Run `/nf-core-bot help` for a list of commands.",
+        f"Unknown command: `{sub}`. Run `/nf-core help` for a list of commands.",
         response_type="ephemeral",
     )
 
@@ -104,7 +104,7 @@ async def _route_hackathon(
     command: dict[str, str],
     tokens: list[str],
 ) -> None:
-    """Dispatch ``/nf-core-bot hackathon <sub> [args…]``."""
+    """Dispatch ``/nf-core hackathon <sub> [args…]``."""
     if not tokens or tokens[0].lower() == "help":
         await handle_hackathon_help(ack, respond, client, user_id)
         return
@@ -137,7 +137,7 @@ async def _route_hackathon(
     else:
         await ack()
         await respond(
-            f"Unknown hackathon command: `{sub}`. Run `/nf-core-bot hackathon help` for options.",
+            f"Unknown hackathon command: `{sub}`. Run `/nf-core hackathon help` for options.",
             response_type="ephemeral",
         )
 
@@ -149,11 +149,11 @@ async def _route_admin(
     body: dict[str, str],
     tokens: list[str],
 ) -> None:
-    """Dispatch ``/nf-core-bot hackathon admin <sub> [args…]``."""
+    """Dispatch ``/nf-core hackathon admin <sub> [args…]``."""
     if not tokens:
         await ack()
         await respond(
-            "Missing admin subcommand. Run `/nf-core-bot hackathon help` for options.",
+            "Missing admin subcommand. Run `/nf-core hackathon help` for options.",
             response_type="ephemeral",
         )
         return
@@ -165,7 +165,7 @@ async def _route_admin(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown admin command: `{sub}`. Run `/nf-core-bot hackathon help` for options.",
+            f"Unknown admin command: `{sub}`. Run `/nf-core hackathon help` for options.",
             response_type="ephemeral",
         )
         return
@@ -192,7 +192,7 @@ async def _route_github(
     command: dict[str, str],
     tokens: list[str],
 ) -> None:
-    """Dispatch ``/nf-core-bot github <sub> [args…]``."""
+    """Dispatch ``/nf-core github <sub> [args…]``."""
     if not tokens or tokens[0].lower() == "help":
         await handle_github_help(ack, respond, client, user_id)
         return
@@ -204,7 +204,7 @@ async def _route_github(
     if handler is None:
         await ack()
         await respond(
-            f"Unknown github command: `{sub}`. Run `/nf-core-bot github help` for options.",
+            f"Unknown github command: `{sub}`. Run `/nf-core github help` for options.",
             response_type="ephemeral",
         )
         return

@@ -1,6 +1,6 @@
 # Command Reference
 
-All commands use the `/nf-core-bot` slash command with subcommand routing. Slack only allows one slash command per app, so everything is parsed as subcommands.
+All commands use the `/nf-core` slash command with subcommand routing. Slack only allows one slash command per app, so everything is parsed as subcommands.
 
 All responses are **ephemeral** (only visible to the caller) unless noted otherwise.
 
@@ -9,7 +9,7 @@ All responses are **ephemeral** (only visible to the caller) unless noted otherw
 ### `help`
 
 ```
-/nf-core-bot help
+/nf-core help
 ```
 
 Show available commands, filtered by your permissions. Admin commands are only shown to `@core-team` members.
@@ -21,7 +21,7 @@ Show available commands, filtered by your permissions. Admin commands are only s
 ### `hackathon help`
 
 ```
-/nf-core-bot hackathon help
+/nf-core hackathon help
 ```
 
 Show hackathon-specific commands available to you.
@@ -29,7 +29,7 @@ Show hackathon-specific commands available to you.
 ### `hackathon list`
 
 ```
-/nf-core-bot hackathon list
+/nf-core hackathon list
 ```
 
 List all non-archived hackathons with their status, dates, and event URL. If you have an active registration for any listed hackathon, your registration status is shown.
@@ -39,7 +39,7 @@ List all non-archived hackathons with their status, dates, and event URL. If you
 ### `hackathon register`
 
 ```
-/nf-core-bot hackathon register
+/nf-core hackathon register
 ```
 
 Register for the currently open hackathon. Opens a multi-step modal form.
@@ -56,7 +56,7 @@ The bot will:
 ### `hackathon edit`
 
 ```
-/nf-core-bot hackathon edit
+/nf-core hackathon edit
 ```
 
 Edit your existing registration. Re-opens the modal form pre-filled with your current answers.
@@ -66,7 +66,7 @@ Edit your existing registration. Re-opens the modal form pre-filled with your cu
 ### `hackathon cancel`
 
 ```
-/nf-core-bot hackathon cancel
+/nf-core hackathon cancel
 ```
 
 Cancel your registration for the active hackathon. Sets your registration status to `cancelled`.
@@ -76,7 +76,7 @@ Cancel your registration for the active hackathon. Sets your registration status
 ### `hackathon attendees`
 
 ```
-/nf-core-bot hackathon attendees [hackathon-id]
+/nf-core hackathon attendees [hackathon-id]
 ```
 
 List registered attendees. If `hackathon-id` is omitted, defaults to the active hackathon.
@@ -88,8 +88,8 @@ List registered attendees. If `hackathon-id` is omitted, defaults to the active 
 **Examples:**
 
 ```
-/nf-core-bot hackathon attendees
-/nf-core-bot hackathon attendees 2026-march
+/nf-core hackathon attendees
+/nf-core hackathon attendees 2026-march
 ```
 
 ---
@@ -103,7 +103,7 @@ All admin commands require `@core-team` Slack user group membership.
 ### `hackathon admin list`
 
 ```
-/nf-core-bot hackathon admin list
+/nf-core hackathon admin list
 ```
 
 List all hackathons including draft and archived ones, with their current status, dates, and event URL. This shows hackathons from all YAML files in `forms/`.
@@ -111,7 +111,7 @@ List all hackathons including draft and archived ones, with their current status
 ### `hackathon admin preview`
 
 ```
-/nf-core-bot hackathon admin preview <hackathon-id>
+/nf-core hackathon admin preview <hackathon-id>
 ```
 
 Open the registration form for a hackathon in preview mode. The modal opens and can be stepped through, but no data is saved to DynamoDB. Useful for testing form YAML changes before opening registration.
@@ -119,13 +119,13 @@ Open the registration form for a hackathon in preview mode. The modal opens and 
 **Example:**
 
 ```
-/nf-core-bot hackathon admin preview 2026-march
+/nf-core hackathon admin preview 2026-march
 ```
 
 ### `hackathon admin add-site`
 
 ```
-/nf-core-bot hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
+/nf-core hackathon admin add-site <hackathon-id> <site-id> <name> | <city> | <country>
 ```
 
 Add a local site to a hackathon. The description uses pipe-separated fields for name, city, and country.
@@ -133,13 +133,13 @@ Add a local site to a hackathon. The description uses pipe-separated fields for 
 **Example:**
 
 ```
-/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain
+/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain
 ```
 
 ### `hackathon admin remove-site`
 
 ```
-/nf-core-bot hackathon admin remove-site <hackathon-id> <site-id>
+/nf-core hackathon admin remove-site <hackathon-id> <site-id>
 ```
 
 Remove a site from a hackathon.
@@ -147,13 +147,13 @@ Remove a site from a hackathon.
 **Example:**
 
 ```
-/nf-core-bot hackathon admin remove-site 2026-march barcelona
+/nf-core hackathon admin remove-site 2026-march barcelona
 ```
 
 ### `hackathon admin list-sites`
 
 ```
-/nf-core-bot hackathon admin list-sites <hackathon-id>
+/nf-core hackathon admin list-sites <hackathon-id>
 ```
 
 List all sites for a hackathon with their organisers.
@@ -161,13 +161,13 @@ List all sites for a hackathon with their organisers.
 **Example:**
 
 ```
-/nf-core-bot hackathon admin list-sites 2026-march
+/nf-core hackathon admin list-sites 2026-march
 ```
 
 ### `hackathon admin add-organiser`
 
 ```
-/nf-core-bot hackathon admin add-organiser <hackathon-id> <site-id> @user
+/nf-core hackathon admin add-organiser <hackathon-id> <site-id> @user
 ```
 
 Add a site organiser. Organisers can view attendee lists scoped to their site(s).
@@ -175,13 +175,13 @@ Add a site organiser. Organisers can view attendee lists scoped to their site(s)
 **Example:**
 
 ```
-/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose
+/nf-core hackathon admin add-organiser 2026-march barcelona @jose
 ```
 
 ### `hackathon admin remove-organiser`
 
 ```
-/nf-core-bot hackathon admin remove-organiser <hackathon-id> <site-id> @user
+/nf-core hackathon admin remove-organiser <hackathon-id> <site-id> @user
 ```
 
 Remove a site organiser.
@@ -189,7 +189,7 @@ Remove a site organiser.
 **Example:**
 
 ```
-/nf-core-bot hackathon admin remove-organiser 2026-march barcelona @jose
+/nf-core hackathon admin remove-organiser 2026-march barcelona @jose
 ```
 
 ---
@@ -227,11 +227,11 @@ The `channel` field accepts either a Slack channel URL (`https://nfcore.slack.co
 
 1. **Create the YAML file** — copy an existing form in `forms/` or start fresh using the JSON schema for guidance. Set `status: draft`.
 2. **Commit and push** — the bot auto-deploys and picks up the new hackathon.
-3. **Preview the form** — `/nf-core-bot hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
-4. **Add sites** — `/nf-core-bot hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
-5. **Add organisers** — `/nf-core-bot hackathon admin add-organiser 2026-march barcelona @jose`
+3. **Preview the form** — `/nf-core hackathon admin preview 2026-march` (opens the modal in preview mode, no data saved).
+4. **Add sites** — `/nf-core hackathon admin add-site 2026-march barcelona Barcelona | Barcelona | Spain`
+5. **Add organisers** — `/nf-core hackathon admin add-organiser 2026-march barcelona @jose`
 6. **Open registrations** — change `status: open` in the YAML, commit, push.
-7. **Monitor** — `/nf-core-bot hackathon attendees`
+7. **Monitor** — `/nf-core hackathon attendees`
 8. **Close registrations** — change `status: closed` in the YAML, commit, push.
 9. **Archive** — change `status: archived` to hide from user-facing `hackathon list`.
 
@@ -253,7 +253,7 @@ These commands manage nf-core GitHub organisation membership. All require `@core
 ### `github help`
 
 ```
-/nf-core-bot github help
+/nf-core github help
 ```
 
 Show GitHub command help.
@@ -261,7 +261,7 @@ Show GitHub command help.
 ### `github add-member`
 
 ```
-/nf-core-bot github add-member <@slack-user|github-username>
+/nf-core github add-member <@slack-user|github-username>
 ```
 
 Invite a user to the nf-core GitHub organisation and add them to the **contributors** team.
@@ -275,8 +275,8 @@ Invite a user to the nf-core GitHub organisation and add them to the **contribut
 **Examples:**
 
 ```
-/nf-core-bot github add-member @alice
-/nf-core-bot github add-member octocat
+/nf-core github add-member @alice
+/nf-core github add-member octocat
 ```
 
 ### Message Shortcut: Add to GitHub org

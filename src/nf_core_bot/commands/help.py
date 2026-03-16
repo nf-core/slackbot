@@ -45,7 +45,7 @@ def _format_commands(cmds: list[tuple[str, str, str]]) -> str:
     """Render a list of commands as a Slack mrkdwn string."""
     lines: list[str] = []
     for cmd, desc, _ in cmds:
-        lines.append(f"  `/nf-core-bot {cmd}` — {desc}")
+        lines.append(f"  `/nf-core {cmd}` — {desc}")
     return "\n".join(lines)
 
 
@@ -55,7 +55,7 @@ async def handle_help(
     client: AsyncWebClient,
     user_id: str,
 ) -> None:
-    """Top-level help: ``/nf-core-bot help``."""
+    """Top-level help: ``/nf-core help``."""
     await ack()
 
     admin = await is_core_team(client, user_id)
@@ -67,9 +67,9 @@ async def handle_help(
 
     sections: list[str] = ["*nf-core bot — available commands*\n"]
     sections.append(_format_commands(visible))
-    sections.append("\nRun `/nf-core-bot hackathon help` for hackathon commands.")
+    sections.append("\nRun `/nf-core hackathon help` for hackathon commands.")
     if admin:
-        sections.append("Run `/nf-core-bot github help` for GitHub commands.")
+        sections.append("Run `/nf-core github help` for GitHub commands.")
 
     await respond("\n".join(sections), response_type="ephemeral")
 
@@ -80,7 +80,7 @@ async def handle_hackathon_help(
     client: AsyncWebClient,
     user_id: str,
 ) -> None:
-    """Hackathon-scoped help: ``/nf-core-bot hackathon help``.
+    """Hackathon-scoped help: ``/nf-core hackathon help``.
 
     Shows only the commands the calling user has access to.
     """
@@ -117,7 +117,7 @@ async def handle_github_help(
     client: AsyncWebClient,
     user_id: str,
 ) -> None:
-    """GitHub-scoped help: ``/nf-core-bot github help``.
+    """GitHub-scoped help: ``/nf-core github help``.
 
     Only visible to @core-team members.
     """

@@ -45,7 +45,7 @@ app = AsyncApp(
 # ── Slash command ────────────────────────────────────────────────────
 
 
-@app.command("/nf-core-bot")
+@app.command("/nf-core")
 async def handle_nf_core_bot(ack, respond, client, command):  # type: ignore[no-untyped-def]
     """Single entry-point — delegates to the router."""
     await dispatch(ack, respond, client, command)

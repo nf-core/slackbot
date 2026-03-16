@@ -36,7 +36,7 @@ Socket Mode lets the bot receive events over a WebSocket instead of requiring a 
 1. Go to **Features** > **Slash Commands** (left sidebar)
 2. Click **Create New Command**
 3. Fill in:
-   - **Command:** `/nf-core-bot`
+   - **Command:** `/nf-core`
    - **Request URL:** `https://example.com/slack/events` (Socket Mode ignores this, but Slack requires a value)
    - **Short Description:** `nf-core community bot`
    - **Usage Hint:** `[help | github add-member | hackathon register]`

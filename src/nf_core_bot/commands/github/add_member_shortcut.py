@@ -102,7 +102,7 @@ async def handle_add_member_shortcut(
                 "Go to your profile → *Edit profile* → fill in the *GitHub* field.\n"
                 "<https://slack.com/help/articles/204092246-Edit-your-profile|How to edit your Slack profile>\n\n"
                 "Once done, a core-team member can try this action again, or use: "
-                "`/nf-core-bot github add-member <github-username>`"
+                "`/nf-core github add-member <github-username>`"
             )
             await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
             return
@@ -116,7 +116,7 @@ async def handle_add_member_shortcut(
                 user=caller_id,
                 text=(
                     "Couldn't find a GitHub username in this message.\n"
-                    "Use `/nf-core-bot github add-member <github-username>` instead."
+                    "Use `/nf-core github add-member <github-username>` instead."
                 ),
             )
             return

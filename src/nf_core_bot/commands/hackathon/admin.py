@@ -85,7 +85,7 @@ def _resolve_hackathon_id(args: list[str]) -> tuple[str | None, list[str]]:
 async def handle_admin_list(ack: Ack, respond: Respond) -> None:
     """List all hackathons (from YAML form files).
 
-    Usage: ``/nf-core-bot hackathon admin list``
+    Usage: ``/nf-core hackathon admin list``
     """
     await ack()
 
@@ -117,7 +117,7 @@ async def handle_admin_preview(
 ) -> None:
     """Preview the registration form for a hackathon.
 
-    Usage: ``/nf-core-bot hackathon admin preview [hackathon-id]``
+    Usage: ``/nf-core hackathon admin preview [hackathon-id]``
 
     Defaults to the active hackathon when *hackathon-id* is omitted.
     """
@@ -126,7 +126,7 @@ async def handle_admin_preview(
     hackathon_id, _ = _resolve_hackathon_id(args)
     if hackathon_id is None:
         await respond(
-            text=f"Usage: `/nf-core-bot hackathon admin preview [hackathon-id]`\n{_NO_ACTIVE_MSG}",
+            text=f"Usage: `/nf-core hackathon admin preview [hackathon-id]`\n{_NO_ACTIVE_MSG}",
             response_type="ephemeral",
         )
         return
@@ -160,7 +160,7 @@ async def handle_admin_add_site(
 ) -> None:
     """Open a modal form to add a new site.
 
-    Usage: ``/nf-core-bot hackathon admin add-site``
+    Usage: ``/nf-core hackathon admin add-site``
     """
     await ack()
 
@@ -189,7 +189,7 @@ async def handle_admin_edit_site(
     Step 1: pick hackathon + site from dropdowns.
     Step 2: edit site details, organisers, or delete.
 
-    Usage: ``/nf-core-bot hackathon admin edit-site``
+    Usage: ``/nf-core hackathon admin edit-site``
     """
     await ack()
 
@@ -208,7 +208,7 @@ async def handle_admin_edit_site(
 
     if not sites:
         await respond(
-            text="No sites found. Use `/nf-core-bot hackathon admin add-site` first.",
+            text="No sites found. Use `/nf-core hackathon admin add-site` first.",
             response_type="ephemeral",
         )
         return
@@ -637,14 +637,14 @@ async def handle_admin_delete_site(ack: Any, body: dict[str, Any], client: Async
 async def handle_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None:
     """List all sites for a hackathon with organisers and registration counts.
 
-    Usage: ``/nf-core-bot hackathon sites [hackathon-id]``
+    Usage: ``/nf-core hackathon sites [hackathon-id]``
     """
     await ack()
 
     hackathon_id, _ = _resolve_hackathon_id(args)
     if hackathon_id is None:
         await respond(
-            text=f"Usage: `/nf-core-bot hackathon sites [hackathon-id]`\n{_NO_ACTIVE_MSG}",
+            text=f"Usage: `/nf-core hackathon sites [hackathon-id]`\n{_NO_ACTIVE_MSG}",
             response_type="ephemeral",
         )
         return
@@ -694,7 +694,7 @@ async def handle_export(
     Core-team members get all registrations. Site organisers get
     registrations scoped to their site(s) only.
 
-    Usage: ``/nf-core-bot hackathon export [hackathon-id]``
+    Usage: ``/nf-core hackathon export [hackathon-id]``
     """
     await ack()
 
@@ -702,7 +702,7 @@ async def handle_export(
     hackathon_id, _ = _resolve_hackathon_id(args)
     if hackathon_id is None:
         await respond(
-            text=f"Usage: `/nf-core-bot hackathon export [hackathon-id]`\n{_NO_ACTIVE_MSG}",
+            text=f"Usage: `/nf-core hackathon export [hackathon-id]`\n{_NO_ACTIVE_MSG}",
             response_type="ephemeral",
         )
         return

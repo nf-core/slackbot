@@ -1,6 +1,6 @@
 """List hackathons — a user-facing command showing all non-archived hackathons.
 
-Usage: ``/nf-core-bot hackathon list``
+Usage: ``/nf-core hackathon list``
 """
 
 from __future__ import annotations

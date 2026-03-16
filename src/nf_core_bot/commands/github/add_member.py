@@ -1,10 +1,10 @@
-"""``/nf-core-bot github add-member`` — invite a user to the nf-core GitHub org.
+"""``/nf-core github add-member`` — invite a user to the nf-core GitHub org.
 
 Usage (explicit Slack mention):
-    ``/nf-core-bot github add-member @slack-user``
+    ``/nf-core github add-member @slack-user``
 
 Usage (explicit GitHub username):
-    ``/nf-core-bot github add-member octocat``
+    ``/nf-core github add-member octocat``
 
 To invite the author of a specific message, use the "Add to GitHub org"
 message shortcut (right-click a message → More actions) instead.
@@ -39,7 +39,7 @@ async def handle_add_member(
     command: dict[str, str],
     args: list[str],
 ) -> None:
-    """Handle ``/nf-core-bot github add-member [target]``."""
+    """Handle ``/nf-core github add-member [target]``."""
     await ack()
 
     # ── 1. Permission check ──────────────────────────────────────────
@@ -81,7 +81,7 @@ async def handle_add_member(
     else:
         # No argument provided
         await respond(
-            "Usage: `/nf-core-bot github add-member [@user | github-username]`\n\n"
+            "Usage: `/nf-core github add-member [@user | github-username]`\n\n"
             "You can also right-click a message and use *More actions → Add to GitHub org* "
             "to invite the message author.",
             response_type="ephemeral",
@@ -161,7 +161,7 @@ async def _warn_missing_github(
         "Go to your profile → *Edit profile* → fill in the *GitHub* field.\n"
         "<https://slack.com/help/articles/204092246-Edit-your-profile|How to edit your Slack profile>\n\n"
         "Once done, a core-team member can re-run: "
-        "`/nf-core-bot github add-member <github-username>`"
+        "`/nf-core github add-member <github-username>`"
     )
     await _thread_reply(client, channel_id, thread_ts, text)
 

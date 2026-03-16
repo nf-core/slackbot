@@ -15,7 +15,7 @@ nf-core-bot is a Slack bot for the nf-core bioinformatics community. The primary
 
 ## Key Design Decisions
 
-- Single slash command `/nf-core-bot` with subcommand routing (Slack only allows one slash command per app)
+- Single slash command `/nf-core` with subcommand routing (Slack only allows one slash command per app)
 - YAML-first hackathon lifecycle: metadata (title, status, dates, channel, URL) and form definitions live in YAML files in `forms/`. To create/open/close/archive a hackathon, edit the YAML and push — no admin slash commands needed.
 - A JSON schema at `schemas/hackathon-form.schema.json` validates YAML files and provides VS Code IntelliSense
 - DynamoDB single-table design with composite keys (see README.md for schema) — stores only sites, organisers, and registrations (not hackathon metadata)
