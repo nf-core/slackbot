@@ -17,16 +17,16 @@ if TYPE_CHECKING:
 # Each entry: (command string, description, min_role)
 # min_role: "all" | "organiser" | "admin"
 HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
-    ("hackathon list", "List hackathons and your registration status", "all"),
+    ("hackathon list", "List hackathons", "all"),
     ("hackathon register", "Register for the active hackathon", "all"),
     ("hackathon edit", "Edit your registration", "all"),
     ("hackathon cancel", "Cancel your registration", "all"),
+    ("hackathon sites [hackathon-id]", "List sites for a hackathon", "all"),
     ("hackathon attendees [hackathon-id]", "List attendees (optionally by site)", "organiser"),
-    ("hackathon admin list", "List all hackathons", "admin"),
+    ("hackathon admin list", "List all hackathons (incl. draft/archived)", "admin"),
     ("hackathon admin preview [hackathon-id]", "Preview the registration form", "admin"),
     ("hackathon admin add-site", "Add a local site (opens a form)", "admin"),
     ("hackathon admin remove-site [hackathon-id] <site-id>", "Remove a local site", "admin"),
-    ("hackathon admin list-sites [hackathon-id]", "List sites for a hackathon", "admin"),
     ("hackathon admin add-organiser [hackathon-id] <site-id> @user", "Add a site organiser", "admin"),
     ("hackathon admin remove-organiser [hackathon-id] <site-id> @user", "Remove a site organiser", "admin"),
 ]

@@ -122,12 +122,13 @@ async def list_sites(hackathon_id: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         kwargs: dict[str, Any] = {
             "KeyConditionExpression": (Key("PK").eq(_pk(hackathon_id)) & Key("SK").begins_with("SITE#")),
-            # Exclude organiser rows — their SK contains '#ORG#'.
-            "FilterExpression": ~Attr("SK").contains("#ORG#"),
         }
         while True:
             response = table.query(**kwargs)
-            items.extend(response.get("Items", []))
+            # Exclude organiser rows (SK contains '#ORG#') — filtered
+            # in Python because DynamoDB does not allow key attributes
+            # in FilterExpression.
+            items.extend(item for item in response.get("Items", []) if "#ORG#" not in item.get("SK", ""))
             last_key = response.get("LastEvaluatedKey")
             if last_key is None:
                 break

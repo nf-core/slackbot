@@ -341,7 +341,7 @@ async def handle_admin_remove_site(ack: Ack, respond: Respond, args: list[str]) 
 async def handle_admin_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None:
     """List all sites for a hackathon.
 
-    Usage: ``/nf-core-bot hackathon admin list-sites [hackathon-id]``
+    Usage: ``/nf-core-bot hackathon sites [hackathon-id]``
 
     Defaults to the active hackathon when *hackathon-id* is omitted.
     """
@@ -350,7 +350,7 @@ async def handle_admin_list_sites(ack: Ack, respond: Respond, args: list[str]) -
     hackathon_id, _ = _resolve_hackathon_id(args)
     if hackathon_id is None:
         await respond(
-            text=f"Usage: `/nf-core-bot hackathon admin list-sites [hackathon-id]`\n{_NO_ACTIVE_MSG}",
+            text=f"Usage: `/nf-core-bot hackathon sites [hackathon-id]`\n{_NO_ACTIVE_MSG}",
             response_type="ephemeral",
         )
         return

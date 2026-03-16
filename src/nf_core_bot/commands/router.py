@@ -131,6 +131,8 @@ async def _route_hackathon(
         await handle_cancel(ack, respond, client, body)
     elif sub == "list":
         await handle_list(ack, respond, client, body)
+    elif sub in ("sites", "list-sites"):
+        await handle_admin_list_sites(ack, respond, rest)
     elif sub == "attendees":
         await handle_attendees(ack, respond, client, body, rest)
     elif sub == "admin":
