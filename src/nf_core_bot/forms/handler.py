@@ -397,6 +397,19 @@ async def open_registration_modal(
     """
     answers: dict[str, Any] = existing_data or {}
 
+    # ── Pre-fill name fields from Slack profile ─────────────────────
+    # The user can always override these in the form.
+    if "first_name" not in answers or "last_name" not in answers:
+        try:
+            profile_resp = await client.users_profile_get(user=user_id)
+            profile: dict[str, Any] = profile_resp.get("profile", {})
+            if "first_name" not in answers:
+                answers.setdefault("first_name", profile.get("first_name") or "")
+            if "last_name" not in answers:
+                answers.setdefault("last_name", profile.get("last_name") or "")
+        except Exception:
+            logger.debug("Could not pre-fill name from Slack profile for user %s.", user_id)
+
     # ── Load form definition ────────────────────────────────────────
     try:
         form = load_form_by_hackathon(hackathon_id)
