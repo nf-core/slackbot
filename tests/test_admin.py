@@ -14,9 +14,9 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_edit_site,
     handle_admin_edit_site_picker,
     handle_admin_list,
-    handle_admin_list_sites,
     handle_admin_preview,
     handle_admin_site_submission,
+    handle_list_sites,
 )
 
 # ── Shared helpers ──────────────────────────────────────────────────
@@ -452,7 +452,7 @@ class TestAdminDeleteSite:
         assert "Could not determine" in text
 
 
-# ── handle_admin_list_sites ──────────────────────────────────────────
+# ── handle_list_sites ──────────────────────────────────────────
 
 
 class TestAdminListSites:
@@ -473,18 +473,28 @@ class TestAdminListSites:
             "nf_core_bot.commands.hackathon.admin.list_organisers",
             AsyncMock(return_value=[{"user_id": "U1"}]),
         )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.count_registrations",
+            AsyncMock(return_value=10),
+        )
+        monkeypatch.setattr(
+            "nf_core_bot.commands.hackathon.admin.count_registrations_by_site",
+            AsyncMock(return_value=5),
+        )
 
-        await handle_admin_list_sites(ack, respond, ["h1"])
+        await handle_list_sites(ack, respond, ["h1"])
 
         ack.assert_awaited_once()
         text = respond.call_args.kwargs["text"]
         assert "Site One" in text
         assert "Site Two" in text
-        assert "1 organiser" in text
+        assert "10 total" in text
+        assert "5 registered" in text
+        assert "<@U1>" in text
 
     @pytest.mark.usefixtures("_patch_no_active")
     async def test_no_args_no_active(self, ack: AsyncMock, respond: AsyncMock) -> None:
-        await handle_admin_list_sites(ack, respond, [])
+        await handle_list_sites(ack, respond, [])
         ack.assert_awaited_once()
         assert "No active hackathon" in respond.call_args.kwargs["text"]
 
@@ -494,6 +504,6 @@ class TestAdminListSites:
             "nf_core_bot.commands.hackathon.admin.list_sites",
             AsyncMock(return_value=[]),
         )
-        await handle_admin_list_sites(ack, respond, ["h1"])
+        await handle_list_sites(ack, respond, ["h1"])
         ack.assert_awaited_once()
         assert "No sites found" in respond.call_args.kwargs["text"]

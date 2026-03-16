@@ -156,22 +156,15 @@ class TestHackathonDispatchTypes:
         mock.assert_awaited_once()
         assert len(mock.call_args[0]) == 4
 
-    async def test_attendees_receives_ack_respond_client_body_rest(self, monkeypatch):
+    async def test_export_receives_ack_respond_client_body_rest(self, monkeypatch):
         mock = AsyncMock()
-        monkeypatch.setattr("nf_core_bot.commands.router.handle_attendees", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon attendees h1"))
+        monkeypatch.setattr("nf_core_bot.commands.router.handle_export", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon export h1"))
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 5  # ack, respond, client, body, rest
-        assert isinstance(args[4], list)  # rest is a list
+        assert isinstance(args[4], list)
         assert args[4] == ["h1"]
-
-    async def test_attendees_with_no_args(self, monkeypatch):
-        mock = AsyncMock()
-        monkeypatch.setattr("nf_core_bot.commands.router.handle_attendees", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("hackathon attendees"))
-        args = mock.call_args[0]
-        assert args[4] == []  # empty list
 
 
 # ── GitHub commands — argument types ────────────────────────────────

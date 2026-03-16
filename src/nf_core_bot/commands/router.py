@@ -14,10 +14,10 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_add_site,
     handle_admin_edit_site,
     handle_admin_list,
-    handle_admin_list_sites,
     handle_admin_preview,
+    handle_export,
+    handle_list_sites,
 )
-from nf_core_bot.commands.hackathon.attendees import handle_attendees
 from nf_core_bot.commands.hackathon.list_cmd import handle_list
 from nf_core_bot.commands.hackathon.register import (
     handle_cancel,
@@ -129,9 +129,9 @@ async def _route_hackathon(
     elif sub == "list":
         await handle_list(ack, respond, client, body)
     elif sub in ("sites", "list-sites"):
-        await handle_admin_list_sites(ack, respond, rest)
-    elif sub == "attendees":
-        await handle_attendees(ack, respond, client, body, rest)
+        await handle_list_sites(ack, respond, rest)
+    elif sub == "export":
+        await handle_export(ack, respond, client, body, rest)
     elif sub == "admin":
         await _route_admin(ack, respond, client, body, rest)
     else:

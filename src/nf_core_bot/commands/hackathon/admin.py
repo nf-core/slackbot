@@ -3,16 +3,27 @@
 Subcommands:
     list, preview
     add-site, edit-site
+
+Also contains the ``sites`` and ``export`` handlers, which are
+accessible to organisers / all users and routed directly by the
+hackathon router (not via the admin dispatch).
 """
 
 from __future__ import annotations
 
 import contextlib
+import csv
+import io
 import json as _json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from nf_core_bot.db.registrations import (
+    count_registrations,
+    count_registrations_by_site,
+    list_registrations,
+)
 from nf_core_bot.db.sites import (
     add_organiser,
     add_site,
@@ -24,6 +35,7 @@ from nf_core_bot.db.sites import (
     update_site,
 )
 from nf_core_bot.forms.loader import get_active_form, get_form_metadata, list_all_forms
+from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -622,8 +634,8 @@ async def handle_admin_delete_site(ack: Any, body: dict[str, Any], client: Async
     )
 
 
-async def handle_admin_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None:
-    """List all sites for a hackathon.
+async def handle_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None:
+    """List all sites for a hackathon with organisers and registration counts.
 
     Usage: ``/nf-core-bot hackathon sites [hackathon-id]``
     """
@@ -650,17 +662,129 @@ async def handle_admin_list_sites(ack: Ack, respond: Respond, args: list[str]) -
         )
         return
 
-    lines: list[str] = [f"*Sites for `{hackathon_id}`:*\n"]
+    total_regs = await count_registrations(hackathon_id)
+    lines: list[str] = [f"*Sites for {hackathon['title']}* ({total_regs} total registrations)\n"]
+
     for site in sorted(sites, key=lambda s: s.get("name", "")):
         sid = site.get("site_id", "?")
         name = site.get("name", "Unnamed")
         city = site.get("city", "")
         country = site.get("country", "")
+        location = f"{city}, {country}" if city and country else city or country
 
         organisers = await list_organisers(hackathon_id, sid)
-        org_count = len(organisers)
-        org_label = f"{org_count} organiser{'s' if org_count != 1 else ''}"
+        org_mentions = ", ".join(f"<@{o.get('user_id', '')}>" for o in organisers)
 
-        lines.append(f"• `{sid}` — *{name}* ({city}, {country}) — {org_label}")
+        reg_count = await count_registrations_by_site(hackathon_id, sid)
+
+        lines.append(f"*{name}* — {location}")
+        lines.append(f"  {reg_count} registered • Organisers: {org_mentions or '_(none)_'}")
 
     await respond(text="\n".join(lines), response_type="ephemeral")
+
+
+# ── Registration export ─────────────────────────────────────────────
+
+
+async def handle_export(
+    ack: Ack, respond: Respond, client: AsyncWebClient, body: dict[str, str], args: list[str]
+) -> None:
+    """Export all registrations as a CSV file sent via DM.
+
+    Core-team members get all registrations. Site organisers get
+    registrations scoped to their site(s) only.
+
+    Usage: ``/nf-core-bot hackathon export [hackathon-id]``
+    """
+    await ack()
+
+    user_id = body["user_id"]
+    hackathon_id, _ = _resolve_hackathon_id(args)
+    if hackathon_id is None:
+        await respond(
+            text=f"Usage: `/nf-core-bot hackathon export [hackathon-id]`\n{_NO_ACTIVE_MSG}",
+            response_type="ephemeral",
+        )
+        return
+
+    hackathon = get_form_metadata(hackathon_id)
+    if hackathon is None:
+        await respond(text=f"Hackathon `{hackathon_id}` not found.", response_type="ephemeral")
+        return
+
+    # ── Permission check (core-team or any site organiser) ─────────
+    core = await is_core_team(client, user_id)
+    if not core:
+        is_org = await is_organiser_any_site(user_id, hackathon_id)
+        if not is_org:
+            await respond(
+                text="You don't have permission to export registrations.",
+                response_type="ephemeral",
+            )
+            return
+
+    # ── Fetch registrations ─────────────────────────────────────────
+    registrations = await list_registrations(hackathon_id)
+
+    if not registrations:
+        await respond(
+            text=f"No registrations found for hackathon `{hackathon_id}`.",
+            response_type="ephemeral",
+        )
+        return
+
+    # ── Build CSV ───────────────────────────────────────────────────
+    # Collect all unique form_data keys across registrations.
+    all_form_keys: list[str] = []
+    seen_keys: set[str] = set()
+    for reg in registrations:
+        for key in reg.get("form_data", {}):
+            if key not in seen_keys:
+                all_form_keys.append(key)
+                seen_keys.add(key)
+
+    profile_cols = ["email", "slack_display_name", "github_username"]
+    meta_cols = ["site_id", "registered_at"]
+    header = profile_cols + all_form_keys + meta_cols
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+
+    for reg in sorted(registrations, key=lambda r: r.get("registered_at", "")):
+        profile = reg.get("profile_data", {})
+        form = reg.get("form_data", {})
+        row = (
+            [profile.get(c, "") for c in profile_cols]
+            + [_csv_value(form.get(k, "")) for k in all_form_keys]
+            + [reg.get("site_id", ""), reg.get("registered_at", "")]
+        )
+        writer.writerow(row)
+
+    csv_content = buf.getvalue()
+
+    # ── Upload CSV as file via DM ───────────────────────────────────
+    try:
+        await client.files_upload_v2(
+            channel=user_id,
+            content=csv_content,
+            filename=f"{hackathon_id}-registrations.csv",
+            title=f"Registrations for {hackathon['title']}",
+            initial_comment=f"Export of {len(registrations)} registration(s).",
+        )
+    except Exception:
+        logger.exception("Failed to upload CSV export for user %s.", user_id)
+        await respond(text="Failed to upload CSV. Please try again.", response_type="ephemeral")
+        return
+
+    await respond(
+        text=f"Exported {len(registrations)} registration(s) — check your DMs.",
+        response_type="ephemeral",
+    )
+
+
+def _csv_value(value: Any) -> str:
+    """Convert a form value to a CSV-friendly string."""
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    return str(value) if value else ""
