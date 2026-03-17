@@ -1,11 +1,13 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
 ## Project Overview
 
 nf-core-bot is a Slack bot for the nf-core bioinformatics community. The primary
-feature is hackathon registration management, with GitHub org invitation tooling.
+feature is hackathon registration management, with GitHub org invitation
+tooling.
 
 ## Tech Stack
 
@@ -55,20 +57,20 @@ reading across four files:
    `FormStep` → `FormField` dataclasses. Evaluates conditional steps.
 2. **`forms/builder.py`** — Converts a `FormStep` into a Slack Block Kit modal
    view dict. Handles pre-population from existing answers.
-3. **`forms/handler.py`** — Orchestrates the flow:
-   `open_registration_modal()` opens step 0;
-   `handle_registration_step()` extracts values, merges with accumulated answers
-   in `private_metadata`, then either advances (via `response_action: "update"`)
-   or finalises (persists to DynamoDB + joins channel).
-4. **`app.py`** — Registers a regex callback
-   `hackathon_reg_step_\d+` that routes all step submissions to the handler.
+3. **`forms/handler.py`** — Orchestrates the flow: `open_registration_modal()`
+   opens step 0; `handle_registration_step()` extracts values, merges with
+   accumulated answers in `private_metadata`, then either advances (via
+   `response_action: "update"`) or finalises (persists to DynamoDB + joins
+   channel).
+4. **`app.py`** — Registers a regex callback `hackathon_reg_step_\d+` that
+   routes all step submissions to the handler.
 
 Answers accumulate in `private_metadata` (JSON, max 3000 chars) across steps.
 
 ### YAML-first hackathon lifecycle
 
-Hackathon metadata lives in YAML files in `hackathons/`, not in the database.
-To create/open/close/archive a hackathon, edit the YAML `status` field and push.
+Hackathon metadata lives in YAML files in `hackathons/`, not in the database. To
+create/open/close/archive a hackathon, edit the YAML `status` field and push.
 DynamoDB stores only sites, organisers, and registrations.
 
 ### GitHub invite flow
@@ -113,7 +115,8 @@ automatically.
 - Type hints throughout (enforce with `mypy --strict`)
 - Async everywhere — Bolt's async adapter, `asyncio.to_thread` for boto3 calls
 - Keep command handlers thin — business logic in `db/`, `forms/`, `checks/`
-- Tests use `moto` for DynamoDB mocking; `pytest-asyncio` with `asyncio_mode = "auto"`
+- Tests use `moto` for DynamoDB mocking; `pytest-asyncio` with
+  `asyncio_mode = "auto"`
 
 ## Important Slack Constraints
 

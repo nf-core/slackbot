@@ -61,17 +61,18 @@ See `hackathons/2026-march.yaml` for a full working example.
 ### Field types
 
 - `text` — plain text input (`multiline: true` for multi-line)
-- `static_select` — dropdown
-- `multi_static_select` — multi-select dropdown
+- `static_select` — dropdown with inline options
+- `external_select` — dropdown with type-ahead search (used for large option
+  sets like countries via `options_from: countries`)
 - `checkboxes` — checkbox group
-- `radio_buttons` — radio button group
 - `type: statement` on a step — informational screen (no input fields), uses
   `text:` for the message
 
 ### Dynamic options
 
 - `options_from: sites` — populates from DynamoDB (sites for this hackathon)
-- `options_from: countries` — built-in countries list with type-ahead search
+- `options_from: countries` — type-ahead country search (requires
+  `external_select`)
 
 ### Conditional steps
 

@@ -37,9 +37,8 @@ Show hackathon-specific commands available to you.
 /hackathon list
 ```
 
-List all non-archived hackathons with their status, dates, and event URL. If you
-have an active registration for any listed hackathon, your registration status
-is shown.
+List all non-archived hackathons with their status, dates, registration count,
+and event URL.
 
 **Permissions:** All users.
 
@@ -80,8 +79,7 @@ current answers.
 /hackathon cancel
 ```
 
-Cancel your registration for the active hackathon. Sets your registration status
-to `cancelled`.
+Cancel your registration for the active hackathon. Deletes your registration.
 
 **Permissions:** All users (must have an active registration).
 
@@ -158,7 +156,7 @@ defaults to the active hackathon.
 ### `admin add-site`
 
 ```
-/hackathon admin add-site [hackathon-id]
+/hackathon admin add-site
 ```
 
 Opens a modal form to add a new site to a hackathon. The form includes a
@@ -168,7 +166,7 @@ multi-user select for organisers.
 ### `admin edit-site`
 
 ```
-/hackathon admin edit-site [hackathon-id] [site-id]
+/hackathon admin edit-site
 ```
 
 Opens a two-step flow: first a picker modal to select the hackathon and site,
