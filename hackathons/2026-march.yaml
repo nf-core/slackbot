@@ -12,6 +12,15 @@ steps:
   - id: welcome
     title: "nf-core Hackathon — March 2026"
     text: |
+      Welcome to the March 2026 nf-core hackathon!
+
+      Join us in person or online March 11-13, 2026.
+      This hackathon follows a hybrid format with in-person local hubs and online participation.
+
+      Find out more on the hackathon event web page:
+      https://nf-co.re/events/2026/hackathon-march-2026
+
+
       Please note that the hackathon is not a training event.
       Beginners are welcome but you'll be expected to just get stuck in!
 

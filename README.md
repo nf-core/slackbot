@@ -6,15 +6,49 @@ organisation tooling.
 Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on
 AWS ECS Fargate + DynamoDB.
 
-## Commands
+This app adds two slash-commands which can be used by anyone in the nf-core
+slack.
 
-Two slash commands:
+All responses are **ephemeral** (only visible to you), except
+`github add-member` which posts visible thread replies.
+
+See [docs/commands.md](docs/commands.md) for the full command reference.
+
+## General Automation
 
 ```bash
 /nf-core help                          # General help
 /nf-core github add-member @user       # Invite to nf-core GitHub org
 /nf-core github add-member <username>  # Invite by GitHub username
+```
 
+The `github add-member` functionality works best when coming from the
+`#github-invitations` channel: right-click any message → **More actions** →
+**Add to GitHub org** to invite the message author.
+
+This automatically finds the GitHub username from the Slack workflow message and
+sends them an invite, with membership in the _Collaborators_ team.
+
+The slach commands `/nf-core github add-member` are mostly for convenience when
+replying elsewhere in Slack.
+
+## Hackathon Registrations
+
+These commands run a hackathon registration system _within Slack_. This is
+helpful because it ensures that all registrants:
+
+- Are part of the nf-core Slack
+- Are added automatically to the hackathon slack channel
+- Have their GitHub username in their Slack profile
+- Are part of the `@nf-core` GitHub organisation
+
+There are 3 main functions to the following commands:
+
+1. People can register / edit / cancel (multi-page modal form in Slack)
+2. Local sites can be added / edited
+3. Attendee lists can be fetched by admins / local site organisers
+
+```bash
 /hackathon help                        # Hackathon help
 /hackathon list                        # List hackathons
 /hackathon register                    # Register for the active hackathon
@@ -28,15 +62,9 @@ Two slash commands:
 /hackathon admin edit-site             # Edit a site (admin, opens modal)
 ```
 
-You can also right-click any message → **More actions** → **Add to GitHub org**
-to invite the message author.
+### Hackathon Form Configuration
 
-All responses are **ephemeral** (only visible to you), except
-`github add-member` which posts visible thread replies.
-
-See [docs/commands.md](docs/commands.md) for the full command reference.
-
-## Hackathon Form Configuration
+To add a new hackathon, just create a new YAML form config file in this repo.
 
 Each hackathon has a YAML file in `hackathons/` containing metadata and form
 steps. A JSON schema at `schemas/hackathon-form.schema.json` provides validation
@@ -45,7 +73,7 @@ and VS Code IntelliSense via the
 
 See `hackathons/2026-march.yaml` for a full working example.
 
-### Metadata fields
+#### Metadata fields
 
 | Field        | Description                                                                |
 | ------------ | -------------------------------------------------------------------------- |
@@ -58,7 +86,7 @@ See `hackathons/2026-march.yaml` for a full working example.
 | `date_end`   | End date (`YYYY-MM-DD`)                                                    |
 | `steps`      | List of form steps                                                         |
 
-### Field types
+#### Field types
 
 - `text` — plain text input (`multiline: true` for multi-line)
 - `static_select` — dropdown with inline options
@@ -68,13 +96,13 @@ See `hackathons/2026-march.yaml` for a full working example.
 - `type: statement` on a step — informational screen (no input fields), uses
   `text:` for the message
 
-### Dynamic options
+#### Dynamic options
 
 - `options_from: sites` — populates from DynamoDB (sites for this hackathon)
 - `options_from: countries` — type-ahead country search (requires
   `external_select`)
 
-### Conditional steps
+#### Conditional steps
 
 Steps can have a `condition` field to show/hide based on a previous answer:
 
@@ -97,7 +125,7 @@ The mode is determined by how you author the YAML — no special field needed:
 | **Online only**                 | No `local_site` field, no site selection step.                                                                               |
 | **Single-location in-person**   | Same as online only — no site selection. Describe the venue in the welcome text.                                             |
 
-## Admin Workflow
+### Admin Workflow
 
 Hackathon lifecycle is managed through YAML files and git — no slash commands
 needed for creation or status changes.
@@ -118,6 +146,12 @@ needed for creation or status changes.
 - **Site organisers** — can view attendees and export data for their site(s)
 
 ## Development
+
+Generally speaking, just commit and push code. Automation on GitHub actions
+should automatically deploy the changes and they will be useable on Slack within
+about 3-5 minutes.
+
+If you really really want to, you can also run locally:
 
 ```bash
 pip install -e ".[dev]"        # Install dependencies
