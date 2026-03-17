@@ -16,8 +16,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from nf_core_bot.checks.github import add_to_team, invite_to_org
 from nf_core_bot.checks.slack_profile import get_github_username, normalise_github_username
+from nf_core_bot.commands.github.invite_flow import invite_and_greet
 from nf_core_bot.permissions.checks import is_core_team
 
 if TYPE_CHECKING:
@@ -128,59 +128,7 @@ async def handle_add_member_shortcut(
         text=f"Looking up `{github_username}` on GitHub…",
     )
 
-    try:
-        org_result = await invite_to_org(github_username)
-    except Exception:
-        logger.exception("Network error inviting %s to org", github_username)
-        await client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=thread_ts,
-            text=f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later.",
-        )
-        return
+    async def _reply(text: str) -> None:
+        await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
 
-    if not org_result.ok:
-        await client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=thread_ts,
-            text=f"Failed to invite `{github_username}` to the nf-core GitHub org:\n>{org_result.message}",
-        )
-        return
-
-    try:
-        team_result = await add_to_team(github_username)
-    except Exception:
-        logger.exception("Network error adding %s to team", github_username)
-        await client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=thread_ts,
-            text=(
-                f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
-                "when adding to the contributors team. Please try again later."
-            ),
-        )
-        return
-
-    if not team_result.ok:
-        await client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=thread_ts,
-            text=(
-                f"Invited `{github_username}` to the org, but failed to add to the "
-                f"contributors team:\n>{team_result.message}"
-            ),
-        )
-        return
-
-    # Build a friendly welcome message
-    greeting = f"Hi <@{greeting_user_id}>, " if greeting_user_id else f"Hi `{github_username}`, "
-    await client.chat_postMessage(
-        channel=channel_id,
-        thread_ts=thread_ts,
-        text=(
-            f"{greeting}<@{caller_id}> has just added you to the nf-core GitHub organisation, "
-            "welcome! :tada:\n\n"
-            "You should have received an invite — you can either check your e-mail "
-            "or click on this link to accept: https://github.com/orgs/nf-core/invitation"
-        ),
-    )
+    await invite_and_greet(github_username, caller_id, _reply, greeting_user_id=greeting_user_id)

@@ -17,6 +17,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _require_active_hackathon(respond: AsyncRespond) -> dict[str, Any] | None:
+    """Return the active hackathon metadata, or ``None`` after sending an error."""
+    try:
+        hackathon = get_active_form()
+    except Exception:
+        logger.exception("Failed to look up active hackathon.")
+        await respond(
+            text="Something went wrong looking up the active hackathon. Please try again later.",
+            response_type="ephemeral",
+        )
+        return None
+
+    if hackathon is None:
+        await respond(
+            text="No hackathon is currently open for registration.",
+            response_type="ephemeral",
+        )
+        return None
+    return hackathon
+
+
 async def handle_register(
     ack: AsyncAck,
     respond: AsyncRespond,
@@ -29,21 +50,8 @@ async def handle_register(
     user_id: str = body["user_id"]
     trigger_id: str = body["trigger_id"]
 
-    try:
-        hackathon = get_active_form()
-    except Exception:
-        logger.exception("Failed to look up active hackathon.")
-        await respond(
-            text="Something went wrong looking up the active hackathon. Please try again later.",
-            response_type="ephemeral",
-        )
-        return
-
+    hackathon = await _require_active_hackathon(respond)
     if hackathon is None:
-        await respond(
-            text="No hackathon is currently open for registration.",
-            response_type="ephemeral",
-        )
         return
 
     hackathon_id: str = hackathon["hackathon_id"]
@@ -80,21 +88,8 @@ async def handle_edit(
     user_id: str = body["user_id"]
     trigger_id: str = body["trigger_id"]
 
-    try:
-        hackathon = get_active_form()
-    except Exception:
-        logger.exception("Failed to look up active hackathon.")
-        await respond(
-            text="Something went wrong looking up the active hackathon. Please try again later.",
-            response_type="ephemeral",
-        )
-        return
-
+    hackathon = await _require_active_hackathon(respond)
     if hackathon is None:
-        await respond(
-            text="No hackathon is currently open for registration.",
-            response_type="ephemeral",
-        )
         return
 
     hackathon_id: str = hackathon["hackathon_id"]
@@ -142,21 +137,8 @@ async def handle_cancel(
 
     user_id: str = body["user_id"]
 
-    try:
-        hackathon = get_active_form()
-    except Exception:
-        logger.exception("Failed to look up active hackathon.")
-        await respond(
-            text="Something went wrong looking up the active hackathon. Please try again later.",
-            response_type="ephemeral",
-        )
-        return
-
+    hackathon = await _require_active_hackathon(respond)
     if hackathon is None:
-        await respond(
-            text="No hackathon is currently open for registration.",
-            response_type="ephemeral",
-        )
         return
 
     hackathon_id: str = hackathon["hackathon_id"]

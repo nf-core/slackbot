@@ -16,8 +16,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from nf_core_bot.checks.github import add_to_team, invite_to_org
 from nf_core_bot.checks.slack_profile import get_github_username, normalise_github_username
+from nf_core_bot.commands.github.invite_flow import invite_and_greet
 from nf_core_bot.permissions.checks import is_core_team
 
 if TYPE_CHECKING:
@@ -92,58 +92,10 @@ async def handle_add_member(
 
     await respond(f"Looking up `{github_username}` on GitHub…", response_type="ephemeral")
 
-    try:
-        org_result = await invite_to_org(github_username)
-    except Exception:
-        logger.exception("Network error inviting %s to org", github_username)
-        await _thread_reply(
-            client,
-            channel_id,
-            thread_ts,
-            f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later.",
-        )
-        return
+    async def _reply(text: str) -> None:
+        await _thread_reply(client, channel_id, thread_ts, text)
 
-    if not org_result.ok:
-        await _thread_reply(
-            client,
-            channel_id,
-            thread_ts,
-            f"Failed to invite `{github_username}` to the nf-core GitHub org:\n>{org_result.message}",
-        )
-        return
-
-    try:
-        team_result = await add_to_team(github_username)
-    except Exception:
-        logger.exception("Network error adding %s to team", github_username)
-        await _thread_reply(
-            client,
-            channel_id,
-            thread_ts,
-            f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
-            "when adding to the contributors team. Please try again later.",
-        )
-        return
-
-    if not team_result.ok:
-        msg = (
-            f"Invited `{github_username}` to the org, but failed to add to the "
-            f"contributors team:\n>{team_result.message}"
-        )
-        await _thread_reply(client, channel_id, thread_ts, msg)
-        return
-
-    greeting = f"Hi <@{target_user_id}>, " if target_user_id else f"Hi `{github_username}`, "
-    await _thread_reply(
-        client,
-        channel_id,
-        thread_ts,
-        f"{greeting}<@{user_id}> has just added you to the nf-core GitHub organisation, "
-        "welcome! :tada:\n\n"
-        "You should have received an invite — you can either check your e-mail "
-        "or click on this link to accept: https://github.com/orgs/nf-core/invitation",
-    )
+    await invite_and_greet(github_username, user_id, _reply, greeting_user_id=target_user_id)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

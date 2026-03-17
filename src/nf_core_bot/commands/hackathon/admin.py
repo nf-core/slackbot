@@ -11,6 +11,7 @@ hackathon router (not via the admin dispatch).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import csv
 import io
@@ -223,31 +224,37 @@ async def handle_admin_edit_site(
         await respond(text="Failed to open edit-site picker.", response_type="ephemeral")
 
 
-def _build_edit_site_picker(
+def _build_hackathon_select(
     forms: list[dict[str, Any]],
-    sites: list[dict[str, Any]],
-    active_hackathon_id: str | None = None,
+    active_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build step-1 modal: pick a hackathon and site to edit."""
-    # Hackathon dropdown.
-    hackathon_options = [
+    """Build a ``static_select`` element for picking a hackathon."""
+    options = [
         {
             "text": {"type": "plain_text", "text": f"{f['title']} ({f['hackathon_id']})"},
             "value": f["hackathon_id"],
         }
         for f in forms
     ]
-    hackathon_element: dict[str, Any] = {
+    element: dict[str, Any] = {
         "type": "static_select",
         "action_id": "hackathon",
-        "options": hackathon_options,
+        "options": options,
     }
-    if active_hackathon_id:
-        for opt in hackathon_options:
-            if opt["value"] == active_hackathon_id:
-                hackathon_element["initial_option"] = opt
+    if active_id:
+        for opt in options:
+            if opt["value"] == active_id:
+                element["initial_option"] = opt
                 break
+    return element
 
+
+def _build_edit_site_picker(
+    forms: list[dict[str, Any]],
+    sites: list[dict[str, Any]],
+    active_hackathon_id: str | None = None,
+) -> dict[str, Any]:
+    """Build step-1 modal: pick a hackathon and site to edit."""
     # Site dropdown.
     site_options = [
         {
@@ -274,7 +281,7 @@ def _build_edit_site_picker(
                 "type": "input",
                 "block_id": "hackathon",
                 "label": {"type": "plain_text", "text": "Hackathon"},
-                "element": hackathon_element,
+                "element": _build_hackathon_select(forms, active_hackathon_id),
             },
             {
                 "type": "input",
@@ -333,29 +340,11 @@ def _build_site_modal(
         meta["hackathon_id"] = active_hackathon_id or ""
 
     # ── Hackathon dropdown ──────────────────────────────────────────
-    hackathon_options = [
-        {
-            "text": {"type": "plain_text", "text": f"{f['title']} ({f['hackathon_id']})"},
-            "value": f["hackathon_id"],
-        }
-        for f in forms
-    ]
-    hackathon_element: dict[str, Any] = {
-        "type": "static_select",
-        "action_id": "hackathon",
-        "options": hackathon_options,
-    }
-    if active_hackathon_id:
-        for opt in hackathon_options:
-            if opt["value"] == active_hackathon_id:
-                hackathon_element["initial_option"] = opt
-                break
-
     hackathon_block: dict[str, Any] = {
         "type": "input",
         "block_id": "hackathon",
         "label": {"type": "plain_text", "text": "Hackathon"},
-        "element": hackathon_element,
+        "element": _build_hackathon_select(forms, active_hackathon_id),
     }
 
     # ── Site ID ─────────────────────────────────────────────────────
@@ -422,14 +411,10 @@ def _build_site_modal(
         "min_query_length": 1,
     }
     if editing and site.get("country"):
-        from nf_core_bot.forms.loader import COUNTRIES
+        from nf_core_bot.forms.loader import COUNTRY_LABELS
 
         country_val = site["country"]
-        country_label = country_val
-        for c in COUNTRIES:
-            if c["value"] == country_val:
-                country_label = c["label"]
-                break
+        country_label = COUNTRY_LABELS.get(country_val, country_val)
         country_element["initial_option"] = {
             "text": {"type": "plain_text", "text": country_label},
             "value": country_val,
@@ -662,20 +647,26 @@ async def handle_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None
         )
         return
 
-    total_regs = await count_registrations(hackathon_id)
+    sorted_sites = sorted(sites, key=lambda s: s.get("name", ""))
+    site_ids = [s.get("site_id", "?") for s in sorted_sites]
+
+    # Fetch total count, per-site counts, and organisers concurrently.
+    total_regs, *per_site = await asyncio.gather(
+        count_registrations(hackathon_id),
+        *[count_registrations_by_site(hackathon_id, sid) for sid in site_ids],
+        *[list_organisers(hackathon_id, sid) for sid in site_ids],
+    )
+    reg_counts = per_site[: len(site_ids)]
+    org_lists = per_site[len(site_ids) :]
+
     lines: list[str] = [f"*Sites for {hackathon['title']}* ({total_regs} total registrations)\n"]
 
-    for site in sorted(sites, key=lambda s: s.get("name", "")):
-        sid = site.get("site_id", "?")
+    for site, reg_count, organisers in zip(sorted_sites, reg_counts, org_lists, strict=True):
         name = site.get("name", "Unnamed")
         city = site.get("city", "")
         country = site.get("country", "")
         location = f"{city}, {country}" if city and country else city or country
-
-        organisers = await list_organisers(hackathon_id, sid)
         org_mentions = ", ".join(f"<@{o.get('user_id', '')}>" for o in organisers)
-
-        reg_count = await count_registrations_by_site(hackathon_id, sid)
 
         lines.append(f"*{name}* — {location}")
         lines.append(f"  {reg_count} registered • Organisers: {org_mentions or '_(none)_'}")

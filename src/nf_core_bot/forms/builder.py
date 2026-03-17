@@ -124,14 +124,9 @@ def _build_external_select_element(
     }
     if initial_value:
         # Reconstruct the initial_option from the value.
-        # For countries, the label is the titlecased value.
-        from nf_core_bot.forms.loader import COUNTRIES
+        from nf_core_bot.forms.loader import COUNTRY_LABELS
 
-        label = initial_value
-        for c in COUNTRIES:
-            if c["value"] == initial_value:
-                label = c["label"]
-                break
+        label = COUNTRY_LABELS.get(initial_value, initial_value)
         element["initial_option"] = _build_option(label, initial_value)
     return element
 

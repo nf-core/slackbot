@@ -38,8 +38,8 @@ class TestPermissionGate:
 
 class TestBareUsername:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_valid_username_invites(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.return_value = GitHubResult(ok=True, message="pending")
         mock_team.return_value = GitHubResult(ok=True, message="active")
@@ -83,8 +83,8 @@ class TestBareUsername:
         client = AsyncMock()
 
         with (
-            patch("nf_core_bot.commands.github.add_member.invite_to_org") as mock_org,
-            patch("nf_core_bot.commands.github.add_member.add_to_team") as mock_team,
+            patch("nf_core_bot.commands.github.invite_flow.invite_to_org") as mock_org,
+            patch("nf_core_bot.commands.github.invite_flow.add_to_team") as mock_team,
         ):
             mock_org.return_value = GitHubResult(ok=True, message="ok")
             mock_team.return_value = GitHubResult(ok=True, message="ok")
@@ -100,8 +100,8 @@ class TestBareUsername:
 class TestSlackMention:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_mention_resolves_github_username(
         self, mock_team: AsyncMock, mock_org: AsyncMock, mock_ghuser: AsyncMock, _perm: AsyncMock
     ) -> None:
@@ -160,7 +160,7 @@ class TestNoArgs:
 
 class TestGitHubApiErrors:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     async def test_org_invite_network_error(self, mock_org: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.side_effect = RuntimeError("connection refused")
 
@@ -177,7 +177,7 @@ class TestGitHubApiErrors:
         assert "Failed to reach the GitHub API" in text
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     async def test_org_invite_api_failure(self, mock_org: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.return_value = GitHubResult(ok=False, message="422 — Validation failed")
 
@@ -194,8 +194,8 @@ class TestGitHubApiErrors:
         assert "Failed to invite" in text
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_team_add_network_error(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.side_effect = RuntimeError("timeout")
@@ -213,8 +213,8 @@ class TestGitHubApiErrors:
         assert "failed to reach the GitHub API" in text
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_team_add_api_failure(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=False, message="403 — Forbidden")

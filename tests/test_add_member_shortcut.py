@@ -69,8 +69,8 @@ class TestGithubUsernameResolution:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_success_invites_and_adds(
         self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
     ) -> None:
@@ -99,8 +99,8 @@ class TestGithubUsernameResolution:
 class TestThreadReply:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_replies_in_thread_when_in_thread(
         self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
     ) -> None:
@@ -119,8 +119,8 @@ class TestThreadReply:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_replies_to_message_when_not_in_thread(
         self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
     ) -> None:
@@ -214,8 +214,8 @@ class TestExtractRequester:
 
 class TestWorkflowMessage:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_workflow_message_extracts_handle(
         self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock
     ) -> None:
@@ -256,7 +256,7 @@ class TestWorkflowMessage:
 class TestGitHubApiErrors:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     async def test_org_invite_network_error(self, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.side_effect = RuntimeError("connection refused")
 
@@ -270,7 +270,7 @@ class TestGitHubApiErrors:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     async def test_org_invite_api_failure(self, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock) -> None:
         mock_org.return_value = GitHubResult(ok=False, message="422 — Validation failed")
 
@@ -284,8 +284,8 @@ class TestGitHubApiErrors:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.invite_to_org")
-    @patch("nf_core_bot.commands.github.add_member_shortcut.add_to_team")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_team_add_network_error(
         self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
     ) -> None:

@@ -400,7 +400,10 @@ async def open_registration_modal(
     # ── Pre-fill from Slack profile ────────────────────────────────
     # Names are editable; email and GitHub are shown read-only.
     try:
-        profile_resp = await client.users_profile_get(user=user_id)
+        profile_resp, github = await asyncio.gather(
+            client.users_profile_get(user=user_id),
+            get_github_username(client, user_id),
+        )
         profile: dict[str, Any] = profile_resp.get("profile", {})
         if "first_name" not in answers:
             answers.setdefault("first_name", profile.get("first_name") or "")
@@ -408,7 +411,6 @@ async def open_registration_modal(
             answers.setdefault("last_name", profile.get("last_name") or "")
         # Store profile fields for read-only display (prefixed with _).
         answers["_email"] = profile.get("email") or ""
-        github = await get_github_username(client, user_id)
         answers["_github_username"] = github or ""
     except Exception:
         logger.debug("Could not pre-fill from Slack profile for user %s.", user_id)

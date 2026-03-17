@@ -225,6 +225,9 @@ COUNTRIES: list[dict[str, str]] = [
     {"label": "Zimbabwe", "value": "ZW"},
 ]
 
+# value → label lookup for O(1) country label resolution.
+COUNTRY_LABELS: dict[str, str] = {c["value"]: c["label"] for c in COUNTRIES}
+
 # ── Validation constants ────────────────────────────────────────────
 
 VALID_STATUSES = frozenset({"draft", "open", "closed", "archived"})
@@ -387,13 +390,17 @@ def load_form_by_hackathon(hackathon_id: str) -> FormDefinition:
     """
     # Fast path: try the conventional filename first.
     candidate = _FORMS_DIR / f"{hackathon_id}.yaml"
+    tried_candidate = False
     if candidate.exists():
+        tried_candidate = True
         form = load_form(candidate)
         if form.hackathon == hackathon_id:
             return form
 
     # Slow path: scan all YAML files in the directory.
     for path in sorted(_FORMS_DIR.glob("*.yaml")):
+        if tried_candidate and path.resolve() == candidate.resolve():
+            continue
         try:
             form = load_form(path)
             if form.hackathon == hackathon_id:
