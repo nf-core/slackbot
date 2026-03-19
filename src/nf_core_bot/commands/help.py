@@ -34,8 +34,19 @@ GITHUB_COMMANDS: list[tuple[str, str, str]] = [
     ("github add-member <username>", "Invite a GitHub user to nf-core GitHub org", "admin"),
 ]
 
+ONCALL_COMMANDS: list[tuple[str, str, str]] = [
+    ("on-call list", "Show the upcoming on-call schedule", "admin"),
+    ("on-call me", "Show your upcoming on-call dates", "admin"),
+    ("on-call switch", "Swap your next on-call week with the person after you", "admin"),
+    ("on-call switch YYYY-MM-DD", "Swap your next on-call week with the specified week", "admin"),
+    ("on-call skip", "Skip your next on-call week (a replacement is assigned)", "admin"),
+    ("on-call unavailable YYYY-MM-DD YYYY-MM-DD", "Mark yourself as unavailable for a date range", "admin"),
+    ("on-call reboot", "Wipe and rebuild the on-call schedule from scratch", "admin"),
+]
+
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
+    ("on-call help", "Show on-call rotation commands (@core-team only)", "admin"),
     ("github help", "Show GitHub commands (@core-team only)", "admin"),
 ]
 
@@ -138,5 +149,18 @@ async def handle_github_help(
         "\nYou can also right-click any message and use *More actions → Add to GitHub org* "
         "to invite the message author."
     )
+
+    await respond("\n".join(sections), response_type="ephemeral")
+
+
+async def handle_oncall_help(
+    respond: Respond,
+) -> None:
+    """On-call help: ``/nf-core on-call help``.
+
+    Only visible to ``@core-team`` members (permission checked in router).
+    """
+    sections = ["*On-call rotation commands* (`@core-team` only)\n"]
+    sections.append(_format_commands(ONCALL_COMMANDS))
 
     await respond("\n".join(sections), response_type="ephemeral")

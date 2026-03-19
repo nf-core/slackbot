@@ -5,9 +5,9 @@ code in this repository.
 
 ## Project Overview
 
-nf-core-bot is a Slack bot for the nf-core bioinformatics community. The primary
-feature is hackathon registration management, with GitHub org invitation
-tooling.
+nf-core-bot is a Slack bot for the nf-core bioinformatics community. Features
+include hackathon registration management, GitHub org invitation tooling, and
+on-call rotation scheduling for the core team.
 
 ## Tech Stack
 
@@ -42,11 +42,12 @@ python -m nf_core_bot.app
 Slack ←→ ECS Fargate (Bolt app) ←→ DynamoDB ←→ GitHub API
 ```
 
-### Two slash commands share one router
+### Three slash-command namespaces share one router
 
-`/nf-core` handles top-level help and GitHub commands. `/hackathon` handles all
-hackathon commands. Both are registered in `app.py` and delegate to
-`commands/router.py` which parses subcommands and dispatches to handlers.
+`/nf-core` handles top-level help, GitHub commands, and on-call commands.
+`/hackathon` handles all hackathon commands. Both are registered in `app.py` and
+delegate to `commands/router.py` which parses subcommands and dispatches to
+handlers.
 
 ### Multi-step modal flow (the critical cross-file path)
 
@@ -79,6 +80,31 @@ DynamoDB stores only sites, organisers, and registrations.
 used by both the slash command (`add_member.py`) and the message shortcut
 (`add_member_shortcut.py`). Both pass a `reply` callback for message delivery.
 
+### On-call rotation
+
+The on-call system manages a weekly rotation for `@core-team` members. All
+on-call commands live under `/nf-core on-call <subcommand>` and are restricted
+to `@core-team` members (permission checked centrally in `_route_oncall()`).
+
+Key files:
+
+- **`commands/oncall/`** — Slash-command handlers (`list`, `me`, `switch`,
+  `skip`, `unavailable`, `reboot`). The router calls `ack()` once and checks
+  `is_core_team()` before dispatching, so individual handlers do **not** receive
+  or call `ack`.
+- **`db/oncall.py`** — DynamoDB CRUD for roster entries, round-robin state,
+  unavailability ranges, and reminder tracking.
+- **`scheduler/oncall_jobs.py`** — Background `asyncio` task launched in
+  `app.py`'s `_start()`. Runs every 60 seconds. Monday jobs (roster extension,
+  cleanup) fire once per week via a `_last_weekly_run` guard. Daily reminders
+  respect each user's Slack timezone.
+- **`commands/oncall/helpers.py`** — Shared utilities: `monday_of_week`,
+  `format_week_range`, `parse_date_arg`.
+
+The round-robin algorithm picks the person who went longest without being on
+call, with `queue_front` priority for people who previously skipped. When all
+members have been assigned in the current window, it cycles through again.
+
 ## Key Design Decisions
 
 - DynamoDB single-table design with composite keys — see key patterns below
@@ -102,6 +128,17 @@ used by both the slash command (`add_member.py`) and the message shortcut
 
 Note: The `PK=HACKATHON#<id> SK=META` pattern is no longer used. Hackathon
 metadata is in YAML files. `db/hackathons.py` no longer exists.
+
+### On-call key patterns
+
+- `PK=ONCALL#<week-start-date> SK=ROSTER` — weekly roster entry (assigned user,
+  status)
+- `PK=ONCALL_META SK=ROUND_ROBIN` — round-robin state (last-assigned dates,
+  queue-front priority list)
+- `PK=ONCALL_META SK=REMINDERS#<week-start-date>` — tracks which reminders have
+  been sent for a given week
+- `PK=ONCALL_UNAVAIL#<user-id> SK=<start-date>#<end-date>` — unavailability
+  range
 
 ## Auto-populated from Slack profile (not in form YAML)
 

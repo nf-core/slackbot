@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from moto import mock_aws
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @pytest.fixture(autouse=True)
@@ -23,3 +28,15 @@ def _env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     for key, value in defaults.items():
         monkeypatch.setenv(key, os.environ.get(key, value))
+
+
+@pytest.fixture
+async def ddb_table() -> AsyncIterator[Any]:
+    """Create a mocked DynamoDB table for testing."""
+    with mock_aws():
+        from nf_core_bot.db import client as db_client
+
+        db_client._table = None
+        db_client.init(table_name="test-table", endpoint_url=None, region="us-east-1")
+        yield db_client.get_table()
+        db_client._table = None
