@@ -15,22 +15,19 @@ from nf_core_bot.commands.oncall.helpers import (
 from nf_core_bot.db.oncall import list_roster, update_roster_assignment
 
 if TYPE_CHECKING:
-    from slack_bolt.async_app import AsyncAck as Ack
-    from slack_bolt.async_app import AsyncRespond as Respond
+    from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
     from slack_sdk.web.async_client import AsyncWebClient
 
 logger = logging.getLogger(__name__)
 
 
 async def handle_oncall_switch(
-    ack: Ack,
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
     args: list[str],
 ) -> None:
     """Swap the caller's next on-call week with another week's assignee."""
-    await ack()
 
     roster = await list_roster(from_date=current_week_start())
     if not roster:

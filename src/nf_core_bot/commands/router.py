@@ -33,9 +33,11 @@ from nf_core_bot.commands.hackathon.register import (
 from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help, handle_oncall_help
 from nf_core_bot.commands.oncall.list_cmd import handle_oncall_list
 from nf_core_bot.commands.oncall.me import handle_oncall_me
+from nf_core_bot.commands.oncall.reboot import handle_oncall_reboot
 from nf_core_bot.commands.oncall.skip import handle_oncall_skip
 from nf_core_bot.commands.oncall.switch import handle_oncall_switch
 from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+from nf_core_bot.permissions.checks import is_core_team
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -247,6 +249,7 @@ _ONCALL_DISPATCH: dict[str, object] = {
     "switch": handle_oncall_switch,
     "skip": handle_oncall_skip,
     "unavailable": handle_oncall_unavailable,
+    "reboot": handle_oncall_reboot,
 }
 
 
@@ -257,9 +260,21 @@ async def _route_oncall(
     user_id: str,
     tokens: list[str],
 ) -> None:
-    """Dispatch ``/nf-core on-call <sub> [args…]``."""
+    """Dispatch ``/nf-core on-call <sub> [args…]``.
+
+    All on-call commands are restricted to ``@core-team`` members.
+    """
+    await ack()
+
+    if not await is_core_team(client, user_id):
+        await respond(
+            "Sorry, on-call commands are restricted to `@core-team` members.",
+            response_type="ephemeral",
+        )
+        return
+
     if not tokens or tokens[0].lower() == "help":
-        await handle_oncall_help(ack, respond)
+        await handle_oncall_help(respond)
         return
 
     sub = tokens[0].lower()
@@ -267,7 +282,6 @@ async def _route_oncall(
 
     handler = _ONCALL_DISPATCH.get(sub)
     if handler is None:
-        await ack()
         await respond(
             f"Unknown on-call command: `{sub}`. Run `/nf-core on-call help` for options.",
             response_type="ephemeral",
@@ -276,11 +290,11 @@ async def _route_oncall(
 
     # Dispatch: handlers have varying signatures.
     if sub == "list":
-        await handler(ack, respond)  # type: ignore[operator]
+        await handler(respond)  # type: ignore[operator]
     elif sub == "me":
-        await handler(ack, respond, user_id)  # type: ignore[operator]
+        await handler(respond, user_id)  # type: ignore[operator]
     elif sub in ("switch", "unavailable"):
-        await handler(ack, respond, client, user_id, rest)  # type: ignore[operator]
+        await handler(respond, client, user_id, rest)  # type: ignore[operator]
     else:
-        # skip: (ack, respond, client, user_id)
-        await handler(ack, respond, client, user_id)  # type: ignore[operator]
+        # skip, reboot: (respond, client, user_id)
+        await handler(respond, client, user_id)  # type: ignore[operator]

@@ -9,15 +9,13 @@ from nf_core_bot.commands.oncall.helpers import current_week_start, format_week_
 from nf_core_bot.db.oncall import list_roster
 
 if TYPE_CHECKING:
-    from slack_bolt.async_app import AsyncAck as Ack
-    from slack_bolt.async_app import AsyncRespond as Respond
+    from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
 
 logger = logging.getLogger(__name__)
 
 
-async def handle_oncall_me(ack: Ack, respond: Respond, user_id: str) -> None:
+async def handle_oncall_me(respond: Respond, user_id: str) -> None:
     """Show the calling user's upcoming on-call weeks."""
-    await ack()
 
     items = await list_roster(from_date=current_week_start())
     my_weeks = [i for i in items if i.get("assigned_user_id") == user_id]

@@ -35,17 +35,18 @@ GITHUB_COMMANDS: list[tuple[str, str, str]] = [
 ]
 
 ONCALL_COMMANDS: list[tuple[str, str, str]] = [
-    ("on-call list", "Show the upcoming on-call schedule", "all"),
-    ("on-call me", "Show your upcoming on-call dates", "all"),
-    ("on-call switch", "Swap your next on-call week with the person after you", "all"),
-    ("on-call switch YYYY-MM-DD", "Swap your next on-call week with the specified week", "all"),
-    ("on-call skip", "Skip your next on-call week (a replacement is assigned)", "all"),
-    ("on-call unavailable YYYY-MM-DD YYYY-MM-DD", "Mark yourself as unavailable for a date range", "all"),
+    ("on-call list", "Show the upcoming on-call schedule", "admin"),
+    ("on-call me", "Show your upcoming on-call dates", "admin"),
+    ("on-call switch", "Swap your next on-call week with the person after you", "admin"),
+    ("on-call switch YYYY-MM-DD", "Swap your next on-call week with the specified week", "admin"),
+    ("on-call skip", "Skip your next on-call week (a replacement is assigned)", "admin"),
+    ("on-call unavailable YYYY-MM-DD YYYY-MM-DD", "Mark yourself as unavailable for a date range", "admin"),
+    ("on-call reboot", "Wipe and rebuild the on-call schedule from scratch", "admin"),
 ]
 
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
-    ("on-call help", "Show on-call rotation commands", "all"),
+    ("on-call help", "Show on-call rotation commands (@core-team only)", "admin"),
     ("github help", "Show GitHub commands (@core-team only)", "admin"),
 ]
 
@@ -153,13 +154,13 @@ async def handle_github_help(
 
 
 async def handle_oncall_help(
-    ack: Ack,
     respond: Respond,
 ) -> None:
-    """On-call help: ``/nf-core on-call help``."""
-    await ack()
+    """On-call help: ``/nf-core on-call help``.
 
-    sections = ["*On-call rotation commands*\n"]
+    Only visible to ``@core-team`` members (permission checked in router).
+    """
+    sections = ["*On-call rotation commands* (`@core-team` only)\n"]
     sections.append(_format_commands(ONCALL_COMMANDS))
 
     await respond("\n".join(sections), response_type="ephemeral")
