@@ -44,7 +44,7 @@ public URL.
    - **Request URL:** `https://example.com/slack/events` (Socket Mode ignores
      this, but Slack requires a value)
    - **Short Description:** `nf-core community bot`
-   - **Usage Hint:** `[help | github add-member | hackathon register]`
+   - **Usage Hint:** `[help | github add | hackathon register]`
    - **Escape channels, users, and links sent to your app:** check this box
 4. Click **Save**
 

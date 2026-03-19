@@ -209,7 +209,7 @@ async def _route_admin(
 # ── GitHub dispatch ──────────────────────────────────────────────────
 
 _GITHUB_DISPATCH: dict[str, object] = {
-    "add-member": handle_add_member,
+    "add": handle_add_member,
 }
 
 

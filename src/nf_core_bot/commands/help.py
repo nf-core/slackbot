@@ -30,8 +30,8 @@ HACKATHON_COMMANDS: list[tuple[str, str, str]] = [
 ]
 
 GITHUB_COMMANDS: list[tuple[str, str, str]] = [
-    ("github add-member @user", "Invite a Slack user to nf-core GitHub org", "admin"),
-    ("github add-member <username>", "Invite a GitHub user to nf-core GitHub org", "admin"),
+    ("github add @user", "Invite a Slack user to nf-core GitHub org", "admin"),
+    ("github add <username>", "Invite a GitHub user to nf-core GitHub org", "admin"),
 ]
 
 ONCALL_COMMANDS: list[tuple[str, str, str]] = [

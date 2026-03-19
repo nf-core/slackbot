@@ -79,6 +79,9 @@ DynamoDB stores only sites, organisers, and registrations.
 `commands/github/invite_flow.py` contains the shared org-invite + team-add logic
 used by both the slash command (`add_member.py`) and the message shortcut
 (`add_member_shortcut.py`). Both pass a `reply` callback for message delivery.
+Channel replies are wrapped in `_safe_reply()` which catches exceptions; on
+failure, `_reply_or_dm()` falls back to DMing the caller. On success the caller
+always receives a DM confirmation as a failsafe.
 
 ### On-call rotation
 
@@ -111,7 +114,7 @@ members have been assigned in the current window, it cycles through again.
 - Two-tier permissions: `@core-team` Slack user group = global admin, site
   organisers = scoped to their hackathon site
 - All bot responses are ephemeral (only visible to the caller) unless explicitly
-  posting to a channel (e.g. `github add-member` posts visible thread replies)
+  posting to a channel (e.g. `github add` posts visible thread replies)
 - Form YAML supports `options_from: sites` for dynamic option lists populated
   from DynamoDB, and `options_from: countries` for type-ahead country search
 - GitHub API calls use a fine-grained PAT with `admin:org` scope

@@ -10,6 +10,7 @@ from nf_core_bot.commands.github.add_member_shortcut import (
     _extract_requester_from_text,
     handle_add_member_shortcut,
 )
+from tests.helpers import channel_messages, dm_messages, make_slack_client
 
 
 def _shortcut(
@@ -38,7 +39,7 @@ class TestPermissionGate:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=False)
     async def test_non_core_team_denied(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
@@ -47,7 +48,8 @@ class TestPermissionGate:
         text = client.chat_postEphemeral.call_args.kwargs["text"]
         assert "restricted" in text.lower()
         # Should NOT proceed to GitHub calls
-        client.chat_postMessage.assert_not_awaited()
+        _chan = channel_messages(client)
+        assert not _chan
 
 
 # ── GitHub username resolution ───────────────────────────────────────
@@ -58,14 +60,13 @@ class TestGithubUsernameResolution:
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value=None)
     async def test_missing_github_warns(self, _ghuser: AsyncMock, _perm: AsyncMock) -> None:
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
-        client.chat_postMessage.assert_awaited_once()
-        text = client.chat_postMessage.call_args.kwargs["text"]
-        assert "GitHub username" in text
-        assert "<@U_TARGET>" in text
+        chan_texts = channel_messages(client)
+        assert any("GitHub username" in t for t in chan_texts)
+        assert any("<@U_TARGET>" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
@@ -78,19 +79,23 @@ class TestGithubUsernameResolution:
         mock_team.return_value = GitHubResult(ok=True, message="active")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
         mock_org.assert_awaited_once_with("octocat")
         mock_team.assert_awaited_once_with("octocat")
-        # Final message should be a welcome with invite link
-        last_call = client.chat_postMessage.call_args_list[-1]
-        text = last_call.kwargs["text"]
-        assert "welcome" in text.lower()
-        assert "nf-core/invitation" in text
-        assert "<@U_TARGET>" in text  # greeting addresses the message author
-        assert "<@U_ADMIN>" in text  # mentions who triggered it
+
+        # Channel reply should be a welcome with invite link
+        chan_texts = channel_messages(client)
+        assert any("welcome" in t.lower() for t in chan_texts)
+        assert any("nf-core/invitation" in t for t in chan_texts)
+        assert any("<@U_TARGET>" in t for t in chan_texts)  # greeting addresses the message author
+        assert any("<@U_ADMIN>" in t for t in chan_texts)  # mentions who triggered it
+
+        # Caller should also get a DM confirmation
+        dm_texts = dm_messages(client)
+        assert any("octocat" in t for t in dm_texts)
 
 
 # ── Thread reply placement ───────────────────────────────────────────
@@ -108,14 +113,16 @@ class TestThreadReply:
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         sc = _shortcut(message_ts="222.333", thread_ts="111.000")
         await handle_add_member_shortcut(ack, sc, client)
 
-        # Should reply in the parent thread, not the message itself
-        last_call = client.chat_postMessage.call_args_list[-1]
-        assert last_call.kwargs["thread_ts"] == "111.000"
+        # The greeting (channel reply) should be in the parent thread, not the message itself
+        chan_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "C_CHAN"]
+        greeting_call = [c for c in chan_calls if "welcome" in c.kwargs.get("text", "").lower()]
+        assert greeting_call
+        assert greeting_call[0].kwargs["thread_ts"] == "111.000"
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
@@ -128,14 +135,16 @@ class TestThreadReply:
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         sc = _shortcut(message_ts="222.333")
         await handle_add_member_shortcut(ack, sc, client)
 
-        # Should reply to the message itself (creating a thread)
-        last_call = client.chat_postMessage.call_args_list[-1]
-        assert last_call.kwargs["thread_ts"] == "222.333"
+        # The greeting should reply to the message itself (creating a thread)
+        chan_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "C_CHAN"]
+        greeting_call = [c for c in chan_calls if "welcome" in c.kwargs.get("text", "").lower()]
+        assert greeting_call
+        assert greeting_call[0].kwargs["thread_ts"] == "222.333"
 
 
 # ── Workflow / bot message handling ───────────────────────────────────
@@ -223,24 +232,28 @@ class TestWorkflowMessage:
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         sc = _workflow_shortcut("By <@U0REQUESTER> at March 13th, 2026\n*Which is your GitHub handle?*\nMuteebaAzhar")
         await handle_add_member_shortcut(ack, sc, client)
 
         mock_org.assert_awaited_once_with("MuteebaAzhar")
         mock_team.assert_awaited_once_with("MuteebaAzhar")
-        # Welcome message should mention the requester and the caller
-        last_call = client.chat_postMessage.call_args_list[-1]
-        text = last_call.kwargs["text"]
-        assert "<@U0REQUESTER>" in text  # greeting addresses workflow requester
-        assert "<@U_ADMIN>" in text  # mentions who triggered it
-        assert "nf-core/invitation" in text
+
+        # Channel reply should mention the requester and the caller
+        chan_texts = channel_messages(client)
+        assert any("<@U0REQUESTER>" in t for t in chan_texts)  # greeting addresses workflow requester
+        assert any("<@U_ADMIN>" in t for t in chan_texts)  # mentions who triggered it
+        assert any("nf-core/invitation" in t for t in chan_texts)
+
+        # DM confirmation should be sent
+        dm_texts = dm_messages(client)
+        assert any("MuteebaAzhar" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     async def test_workflow_message_no_handle_shows_error(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         sc = _workflow_shortcut("Just a random bot message")
         await handle_add_member_shortcut(ack, sc, client)
@@ -261,12 +274,15 @@ class TestGitHubApiErrors:
         mock_org.side_effect = RuntimeError("connection refused")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
-        last_msg = client.chat_postMessage.call_args_list[-1]
-        assert "Failed to reach the GitHub API" in last_msg.kwargs["text"]
+        chan_texts = channel_messages(client)
+        # Channel reply may or may not work — check DM too
+        dm_texts = dm_messages(client)
+        all_texts = chan_texts + dm_texts
+        assert any("Failed to reach the GitHub API" in t for t in all_texts)
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
@@ -275,12 +291,14 @@ class TestGitHubApiErrors:
         mock_org.return_value = GitHubResult(ok=False, message="422 — Validation failed")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
-        last_msg = client.chat_postMessage.call_args_list[-1]
-        assert "Failed to invite" in last_msg.kwargs["text"]
+        chan_texts = channel_messages(client)
+        dm_texts = dm_messages(client)
+        all_texts = chan_texts + dm_texts
+        assert any("Failed to invite" in t for t in all_texts)
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
@@ -293,9 +311,68 @@ class TestGitHubApiErrors:
         mock_team.side_effect = RuntimeError("timeout")
 
         ack = AsyncMock()
-        client = AsyncMock()
+        client = make_slack_client()
 
         await handle_add_member_shortcut(ack, _shortcut(), client)
 
-        last_msg = client.chat_postMessage.call_args_list[-1]
-        assert "failed to reach the GitHub API" in last_msg.kwargs["text"]
+        chan_texts = channel_messages(client)
+        dm_texts = dm_messages(client)
+        all_texts = chan_texts + dm_texts
+        assert any("failed to reach the GitHub API" in t for t in all_texts)
+
+
+# ── DM failsafe ──────────────────────────────────────────────────────
+
+
+class TestDmFailsafe:
+    @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
+    async def test_dm_sent_on_success(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        """Caller always receives a DM confirmation on success."""
+        mock_org.return_value = GitHubResult(ok=True, message="ok")
+        mock_team.return_value = GitHubResult(ok=True, message="ok")
+
+        ack = AsyncMock()
+        client = make_slack_client()
+
+        await handle_add_member_shortcut(ack, _shortcut(), client)
+
+        client.conversations_open.assert_awaited()
+        dm_texts = dm_messages(client)
+        assert any("octocat" in t and "invited" in t for t in dm_texts)
+
+    @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
+    async def test_channel_reply_failure_falls_back_to_dm(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        """When channel reply fails, caller still gets the DM."""
+        mock_org.return_value = GitHubResult(ok=True, message="ok")
+        mock_team.return_value = GitHubResult(ok=True, message="ok")
+
+        ack = AsyncMock()
+        client = make_slack_client()
+
+        # First chat_postMessage (channel reply) fails, subsequent ones (DMs) succeed
+        call_count = 0
+
+        async def _side_effect(**kwargs: str) -> dict:  # type: ignore[type-arg]
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("channel_not_found")
+            return {"ok": True}
+
+        client.chat_postMessage.side_effect = _side_effect
+
+        await handle_add_member_shortcut(ack, _shortcut(), client)
+
+        # DM should still be sent
+        client.conversations_open.assert_awaited()
+        assert call_count >= 2

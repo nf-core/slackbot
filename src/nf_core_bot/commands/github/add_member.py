@@ -1,10 +1,10 @@
-"""``/nf-core github add-member`` — invite a user to the nf-core GitHub org.
+"""``/nf-core github add`` — invite a user to the nf-core GitHub org.
 
 Usage (explicit Slack mention):
-    ``/nf-core github add-member @slack-user``
+    ``/nf-core github add @slack-user``
 
 Usage (explicit GitHub username):
-    ``/nf-core github add-member octocat``
+    ``/nf-core github add octocat``
 
 To invite the author of a specific message, use the "Add to GitHub org"
 message shortcut (right-click a message → More actions) instead.
@@ -39,7 +39,7 @@ async def handle_add_member(
     command: dict[str, str],
     args: list[str],
 ) -> None:
-    """Handle ``/nf-core github add-member [target]``."""
+    """Handle ``/nf-core github add [target]``."""
     await ack()
 
     # ── 1. Permission check ──────────────────────────────────────────
@@ -66,7 +66,7 @@ async def handle_add_member(
             target_user_id = mention_match.group(1)
             github_username = await get_github_username(client, target_user_id)
             if github_username is None:
-                await _warn_missing_github(client, channel_id, thread_ts, target_user_id)
+                await _warn_missing_github(client, channel_id, thread_ts, target_user_id, respond)
                 return
         else:
             # Treat it as a plain GitHub username — validate first
@@ -81,7 +81,7 @@ async def handle_add_member(
     else:
         # No argument provided
         await respond(
-            "Usage: `/nf-core github add-member [@user | github-username]`\n\n"
+            "Usage: `/nf-core github add [@user | github-username]`\n\n"
             "You can also right-click a message and use *More actions → Add to GitHub org* "
             "to invite the message author.",
             response_type="ephemeral",
@@ -95,7 +95,7 @@ async def handle_add_member(
     async def _reply(text: str) -> None:
         await _thread_reply(client, channel_id, thread_ts, text)
 
-    await invite_and_greet(github_username, user_id, _reply, greeting_user_id=target_user_id)
+    await invite_and_greet(github_username, user_id, _reply, greeting_user_id=target_user_id, client=client)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -106,16 +106,25 @@ async def _warn_missing_github(
     channel_id: str,
     thread_ts: str,
     target_user_id: str,
+    respond: Respond | None = None,
 ) -> None:
-    """Post a visible thread reply telling the user to add their GitHub username."""
+    """Post a visible thread reply telling the user to add their GitHub username.
+
+    Falls back to an ephemeral *respond()* if the channel reply fails.
+    """
     text = (
         f"<@{target_user_id}> — please add your GitHub username to your Slack profile!\n"
         "Go to your profile → *Edit profile* → fill in the *GitHub* field.\n"
         "<https://slack.com/help/articles/204092246-Edit-your-profile|How to edit your Slack profile>\n\n"
         "Once done, a core-team member can re-run: "
-        "`/nf-core github add-member <github-username>`"
+        "`/nf-core github add <github-username>`"
     )
-    await _thread_reply(client, channel_id, thread_ts, text)
+    try:
+        await _thread_reply(client, channel_id, thread_ts, text)
+    except Exception:
+        logger.exception("Channel reply failed in _warn_missing_github")
+        if respond:
+            await respond(text, response_type="ephemeral")
 
 
 async def _thread_reply(
