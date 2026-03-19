@@ -79,6 +79,9 @@ DynamoDB stores only sites, organisers, and registrations.
 `commands/github/invite_flow.py` contains the shared org-invite + team-add logic
 used by both the slash command (`add_member.py`) and the message shortcut
 (`add_member_shortcut.py`). Both pass a `reply` callback for message delivery.
+Channel replies are wrapped in `_safe_reply()` which catches exceptions; on
+failure, `_reply_or_dm()` falls back to DMing the caller. On success the caller
+always receives a DM confirmation as a failsafe.
 
 ### On-call rotation
 
