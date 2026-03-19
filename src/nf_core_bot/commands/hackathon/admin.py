@@ -657,7 +657,7 @@ async def handle_list_sites(ack: Ack, respond: Respond, args: list[str]) -> None
         *[list_organisers(hackathon_id, sid) for sid in site_ids],
     )
     reg_counts = per_site[: len(site_ids)]
-    org_lists = per_site[len(site_ids) :]
+    org_lists: list[list[dict[str, str]]] = per_site[len(site_ids) :]  # type: ignore[assignment]
 
     lines: list[str] = [f"*Sites for {hackathon['title']}* ({total_regs} total registrations)\n"]
 
