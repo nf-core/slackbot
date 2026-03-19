@@ -30,7 +30,12 @@ from nf_core_bot.commands.hackathon.register import (
     handle_edit,
     handle_register,
 )
-from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help
+from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help, handle_oncall_help
+from nf_core_bot.commands.oncall.list_cmd import handle_oncall_list
+from nf_core_bot.commands.oncall.me import handle_oncall_me
+from nf_core_bot.commands.oncall.skip import handle_oncall_skip
+from nf_core_bot.commands.oncall.switch import handle_oncall_switch
+from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -87,6 +92,11 @@ async def dispatch(
     # ── GitHub commands ──────────────────────────────────────────────
     if sub == "github":
         await _route_github(ack, respond, client, user_id, command, rest)
+        return
+
+    # ── On-call commands ─────────────────────────────────────────────
+    if sub == "on-call":
+        await _route_oncall(ack, respond, client, user_id, rest)
         return
 
     # ── Unknown ──────────────────────────────────────────────────────
@@ -227,3 +237,50 @@ async def _route_github(
         return
 
     await handler(ack, respond, client, user_id, command, rest)  # type: ignore[operator]
+
+
+# ── On-call dispatch ─────────────────────────────────────────────────
+
+_ONCALL_DISPATCH: dict[str, object] = {
+    "list": handle_oncall_list,
+    "me": handle_oncall_me,
+    "switch": handle_oncall_switch,
+    "skip": handle_oncall_skip,
+    "unavailable": handle_oncall_unavailable,
+}
+
+
+async def _route_oncall(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    tokens: list[str],
+) -> None:
+    """Dispatch ``/nf-core on-call <sub> [args…]``."""
+    if not tokens or tokens[0].lower() == "help":
+        await handle_oncall_help(ack, respond)
+        return
+
+    sub = tokens[0].lower()
+    rest = tokens[1:]
+
+    handler = _ONCALL_DISPATCH.get(sub)
+    if handler is None:
+        await ack()
+        await respond(
+            f"Unknown on-call command: `{sub}`. Run `/nf-core on-call help` for options.",
+            response_type="ephemeral",
+        )
+        return
+
+    # Dispatch: handlers have varying signatures.
+    if sub == "list":
+        await handler(ack, respond)  # type: ignore[operator]
+    elif sub == "me":
+        await handler(ack, respond, user_id)  # type: ignore[operator]
+    elif sub in ("switch", "unavailable"):
+        await handler(ack, respond, client, user_id, rest)  # type: ignore[operator]
+    else:
+        # skip: (ack, respond, client, user_id)
+        await handler(ack, respond, client, user_id)  # type: ignore[operator]

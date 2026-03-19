@@ -3,20 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from moto import mock_aws
-
-
-@pytest.fixture
-async def ddb_table():
-    """Create a mocked DynamoDB table for testing."""
-    with mock_aws():
-        from nf_core_bot.db import client as db_client
-
-        db_client._table = None
-        db_client.init(table_name="test-table", endpoint_url=None, region="us-east-1")
-        yield db_client.get_table()
-        db_client._table = None
-
 
 HACK_ID = "hack-sites"
 

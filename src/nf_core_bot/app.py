@@ -8,6 +8,7 @@ Usage (local dev)::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -27,12 +28,17 @@ from nf_core_bot.forms.handler import (
     handle_country_suggestions,
     handle_registration_step,
 )
+from nf_core_bot.scheduler.oncall_jobs import run_oncall_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(name)-30s  %(levelname)-8s  %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Strong references to background tasks so they are not garbage-collected.
+# See https://docs.python.org/3/library/asyncio-task.html#creating-tasks
+_background_tasks: set[asyncio.Task[None]] = set()
 
 # ── Bolt app ─────────────────────────────────────────────────────────
 
@@ -131,14 +137,19 @@ async def _start() -> None:
         )
     logger.info("nf-core-bot starting (Socket Mode) …")
 
+    # Launch the on-call scheduler as a background task.
+    # Store in _background_tasks to prevent garbage collection.
+    task = asyncio.create_task(run_oncall_scheduler(app.client))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    logger.info("On-call scheduler started.")
+
     handler = AsyncSocketModeHandler(app, config.SLACK_APP_TOKEN)
     await handler.start_async()  # type: ignore[no-untyped-call]
 
 
 def main() -> None:
     """Synchronous wrapper so ``python -m nf_core_bot.app`` works."""
-    import asyncio
-
     asyncio.run(_start())
 
 
