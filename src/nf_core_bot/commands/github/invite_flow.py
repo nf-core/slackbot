@@ -35,13 +35,24 @@ async def _dm_caller(client: AsyncWebClient, caller_user_id: str, text: str) -> 
         logger.exception("Failed to DM caller %s", caller_user_id)
 
 
+async def _reply_or_dm(
+    reply: Callable[[str], Awaitable[None]],
+    client: AsyncWebClient,
+    caller_user_id: str,
+    text: str,
+) -> None:
+    """Try the channel *reply*; fall back to a DM if it fails."""
+    if not await _safe_reply(reply, text):
+        await _dm_caller(client, caller_user_id, text)
+
+
 async def invite_and_greet(
     github_username: str,
     caller_user_id: str,
     reply: Callable[[str], Awaitable[None]],
     greeting_user_id: str | None = None,
     *,
-    client: AsyncWebClient | None = None,
+    client: AsyncWebClient,
 ) -> bool:
     """Invite *github_username* to the nf-core org and contributors team.
 
@@ -57,14 +68,12 @@ async def invite_and_greet(
     except Exception:
         logger.exception("Network error inviting %s to org", github_username)
         msg = f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later."
-        if not await _safe_reply(reply, msg) and client:
-            await _dm_caller(client, caller_user_id, msg)
+        await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
     if not org_result.ok:
         msg = f"Failed to invite `{github_username}` to the nf-core GitHub org:\n>{org_result.message}"
-        if not await _safe_reply(reply, msg) and client:
-            await _dm_caller(client, caller_user_id, msg)
+        await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
     # ── 2. Team add ──────────────────────────────────────────────────
@@ -76,8 +85,7 @@ async def invite_and_greet(
             f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
             "when adding to the contributors team. Please try again later."
         )
-        if not await _safe_reply(reply, msg) and client:
-            await _dm_caller(client, caller_user_id, msg)
+        await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
     if not team_result.ok:
@@ -85,8 +93,7 @@ async def invite_and_greet(
             f"Invited `{github_username}` to the org, but failed to add to the "
             f"contributors team:\n>{team_result.message}"
         )
-        if not await _safe_reply(reply, msg) and client:
-            await _dm_caller(client, caller_user_id, msg)
+        await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
     # ── 3. Success greeting ──────────────────────────────────────────
@@ -100,10 +107,9 @@ async def invite_and_greet(
     await _safe_reply(reply, msg)
 
     # Always DM the caller as a failsafe confirmation
-    if client:
-        dm_text = (
-            f"Done! `{github_username}` has been invited to the nf-core GitHub org and added to the contributors team."
-        )
-        await _dm_caller(client, caller_user_id, dm_text)
+    dm_text = (
+        f"Done! `{github_username}` has been invited to the nf-core GitHub org and added to the contributors team."
+    )
+    await _dm_caller(client, caller_user_id, dm_text)
 
     return True

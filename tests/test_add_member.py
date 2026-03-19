@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from nf_core_bot.checks.github import GitHubResult
 from nf_core_bot.commands.github.add_member import handle_add_member
+from tests.helpers import channel_messages, dm_messages, make_slack_client
 
 
 def _command(channel: str = "C_CHAN", thread_ts: str = "") -> dict[str, str]:
@@ -16,28 +17,6 @@ def _command(channel: str = "C_CHAN", thread_ts: str = "") -> dict[str, str]:
     return cmd
 
 
-def _make_client() -> AsyncMock:
-    """Build an ``AsyncWebClient`` mock whose ``conversations_open`` returns a DM channel."""
-    client = AsyncMock()
-    client.conversations_open.return_value = {"channel": {"id": "D_DM"}}
-    return client
-
-
-def _channel_messages(client: AsyncMock, channel: str = "C_CHAN") -> list[str]:
-    """Return all ``chat_postMessage`` texts sent to *channel* (excludes DMs)."""
-    texts: list[str] = []
-    for call in client.chat_postMessage.call_args_list:
-        ch = call.kwargs.get("channel", call.args[0] if call.args else "")
-        if ch == channel:
-            texts.append(call.kwargs.get("text", ""))
-    return texts
-
-
-def _dm_messages(client: AsyncMock) -> list[str]:
-    """Return all ``chat_postMessage`` texts sent to the DM channel."""
-    return _channel_messages(client, "D_DM")
-
-
 # ── Permission check ─────────────────────────────────────────────────
 
 
@@ -46,7 +25,7 @@ class TestPermissionGate:
     async def test_non_core_team_denied(self, _mock_perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_USER", _command(), ["octocat"])
 
@@ -68,7 +47,7 @@ class TestBareUsername:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
@@ -76,20 +55,20 @@ class TestBareUsername:
         mock_team.assert_awaited_once_with("octocat")
 
         # Channel reply should contain the welcome greeting
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("welcome" in t.lower() for t in chan_texts)
         assert any("nf-core/invitation" in t for t in chan_texts)
         assert any("<@U_ADMIN>" in t for t in chan_texts)
 
         # Caller should also get a DM confirmation
-        dm_texts = _dm_messages(client)
+        dm_texts = dm_messages(client)
         assert any("octocat" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     async def test_invalid_username_rejected(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["I don't know"])
 
@@ -104,7 +83,7 @@ class TestBareUsername:
         """Passing a full GitHub URL should extract and validate the username."""
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         with (
             patch("nf_core_bot.commands.github.invite_flow.invite_to_org") as mock_org,
@@ -134,7 +113,7 @@ class TestSlackMention:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["<@U01234TARGET>"])
 
@@ -142,12 +121,12 @@ class TestSlackMention:
         mock_org.assert_awaited_once_with("octocat")
 
         # Channel reply should greet the target user
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("<@U01234TARGET>" in t for t in chan_texts)
         assert any("<@U_ADMIN>" in t for t in chan_texts)
 
         # DM confirmation should be sent
-        dm_texts = _dm_messages(client)
+        dm_texts = dm_messages(client)
         assert any("octocat" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
@@ -155,13 +134,13 @@ class TestSlackMention:
     async def test_mention_missing_github_warns(self, _mock_ghuser: AsyncMock, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(thread_ts="123"), ["<@U01234TARGET>"])
 
         # Should post a warning about missing GitHub username
         client.chat_postMessage.assert_awaited()
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("GitHub username" in t for t in chan_texts)
 
 
@@ -173,7 +152,7 @@ class TestNoArgs:
     async def test_no_args_shows_usage(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), [])
 
@@ -192,11 +171,11 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("Failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
@@ -206,11 +185,11 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("Failed to invite" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
@@ -222,11 +201,11 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
@@ -238,11 +217,11 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        chan_texts = _channel_messages(client)
+        chan_texts = channel_messages(client)
         assert any("failed to add to the" in t for t in chan_texts)
 
 
@@ -260,12 +239,12 @@ class TestDmFailsafe:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
         client.conversations_open.assert_awaited()
-        dm_texts = _dm_messages(client)
+        dm_texts = dm_messages(client)
         assert any("octocat" in t and "invited" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
@@ -280,7 +259,7 @@ class TestDmFailsafe:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = _make_client()
+        client = make_slack_client()
 
         # First chat_postMessage (channel reply) fails, subsequent ones (DMs) succeed
         call_count = 0
