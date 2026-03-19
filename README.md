@@ -9,27 +9,27 @@ AWS ECS Fargate + DynamoDB.
 This app adds two slash-commands which can be used by anyone in the nf-core
 slack.
 
-All responses are **ephemeral** (only visible to you), except
-`github add-member` which posts visible thread replies.
+All responses are **ephemeral** (only visible to you), except `github add` which
+posts visible thread replies.
 
 See [docs/commands.md](docs/commands.md) for the full command reference.
 
 ## General Automation
 
 ```bash
-/nf-core help                          # General help
-/nf-core github add-member @user       # Invite to nf-core GitHub org
-/nf-core github add-member <username>  # Invite by GitHub username
+/nf-core help                      # General help
+/nf-core github add @user          # Invite to nf-core GitHub org
+/nf-core github add <username>     # Invite by GitHub username
 ```
 
-The `github add-member` functionality works best when coming from the
+The `github add` functionality works best when coming from the
 `#github-invitations` channel: right-click any message → **More actions** →
 **Add to GitHub org** to invite the message author.
 
 This automatically finds the GitHub username from the Slack workflow message and
 sends them an invite, with membership in the _Collaborators_ team.
 
-The slach commands `/nf-core github add-member` are mostly for convenience when
+The slash commands `/nf-core github add` are mostly for convenience when
 replying elsewhere in Slack.
 
 ## Hackathon Registrations

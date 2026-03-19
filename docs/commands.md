@@ -285,10 +285,10 @@ These commands manage nf-core GitHub organisation membership. All require
 
 Show GitHub command help.
 
-### `github add-member`
+### `github add`
 
 ```
-/nf-core github add-member <@slack-user|github-username>
+/nf-core github add <@slack-user|github-username>
 ```
 
 Invite a user to the nf-core GitHub organisation and add them to the
@@ -304,8 +304,8 @@ Invite a user to the nf-core GitHub organisation and add them to the
 **Examples:**
 
 ```
-/nf-core github add-member @alice
-/nf-core github add-member octocat
+/nf-core github add @alice
+/nf-core github add octocat
 ```
 
 ### Message Shortcut: Add to GitHub org
@@ -319,7 +319,7 @@ threads).
 
 **Permissions:** `@core-team` only.
 
-### How `add-member` Works
+### How `add` Works
 
 1. **Permission check** — verifies you're in the `@core-team` Slack user group
 2. **Target resolution** — determines who to invite:

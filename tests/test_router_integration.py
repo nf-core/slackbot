@@ -180,8 +180,8 @@ class TestHackathonDispatchTypes:
 class TestGithubDispatchTypes:
     async def test_add_member_receives_correct_args(self, monkeypatch):
         mock = AsyncMock()
-        monkeypatch.setitem(router_mod._GITHUB_DISPATCH, "add-member", mock)
-        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("github add-member octocat"))
+        monkeypatch.setitem(router_mod._GITHUB_DISPATCH, "add", mock)
+        await dispatch(AsyncMock(), AsyncMock(), AsyncMock(), _command("github add octocat"))
         mock.assert_awaited_once()
         args = mock.call_args[0]
         assert len(args) == 6  # ack, respond, client, user_id, command, rest

@@ -102,9 +102,13 @@ async def handle_add_member_shortcut(
                 "Go to your profile → *Edit profile* → fill in the *GitHub* field.\n"
                 "<https://slack.com/help/articles/204092246-Edit-your-profile|How to edit your Slack profile>\n\n"
                 "Once done, a core-team member can try this action again, or use: "
-                "`/nf-core github add-member <github-username>`"
+                "`/nf-core github add <github-username>`"
             )
-            await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
+            try:
+                await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
+            except Exception:
+                logger.exception("Channel reply failed when warning about missing GitHub username")
+                await client.chat_postEphemeral(channel=channel_id, user=caller_id, text=text)
             return
     else:
         # Workflow/bot message — try to extract GitHub handle from the text
@@ -116,7 +120,7 @@ async def handle_add_member_shortcut(
                 user=caller_id,
                 text=(
                     "Couldn't find a GitHub username in this message.\n"
-                    "Use `/nf-core github add-member <github-username>` instead."
+                    "Use `/nf-core github add <github-username>` instead."
                 ),
             )
             return
@@ -131,4 +135,4 @@ async def handle_add_member_shortcut(
     async def _reply(text: str) -> None:
         await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
 
-    await invite_and_greet(github_username, caller_id, _reply, greeting_user_id=greeting_user_id)
+    await invite_and_greet(github_username, caller_id, _reply, greeting_user_id=greeting_user_id, client=client)

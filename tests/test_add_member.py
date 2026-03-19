@@ -16,6 +16,28 @@ def _command(channel: str = "C_CHAN", thread_ts: str = "") -> dict[str, str]:
     return cmd
 
 
+def _make_client() -> AsyncMock:
+    """Build an ``AsyncWebClient`` mock whose ``conversations_open`` returns a DM channel."""
+    client = AsyncMock()
+    client.conversations_open.return_value = {"channel": {"id": "D_DM"}}
+    return client
+
+
+def _channel_messages(client: AsyncMock, channel: str = "C_CHAN") -> list[str]:
+    """Return all ``chat_postMessage`` texts sent to *channel* (excludes DMs)."""
+    texts: list[str] = []
+    for call in client.chat_postMessage.call_args_list:
+        ch = call.kwargs.get("channel", call.args[0] if call.args else "")
+        if ch == channel:
+            texts.append(call.kwargs.get("text", ""))
+    return texts
+
+
+def _dm_messages(client: AsyncMock) -> list[str]:
+    """Return all ``chat_postMessage`` texts sent to the DM channel."""
+    return _channel_messages(client, "D_DM")
+
+
 # ── Permission check ─────────────────────────────────────────────────
 
 
@@ -24,7 +46,7 @@ class TestPermissionGate:
     async def test_non_core_team_denied(self, _mock_perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_USER", _command(), ["octocat"])
 
@@ -46,26 +68,28 @@ class TestBareUsername:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
         mock_org.assert_awaited_once_with("octocat")
         mock_team.assert_awaited_once_with("octocat")
-        # Final thread reply should mention success
-        client.chat_postMessage.assert_awaited()
-        final_text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "welcome" in final_text.lower()
-        assert "nf-core/invitation" in final_text
-        assert "<@U_ADMIN>" in final_text  # mentions who triggered it
+
+        # Channel reply should contain the welcome greeting
+        chan_texts = _channel_messages(client)
+        assert any("welcome" in t.lower() for t in chan_texts)
+        assert any("nf-core/invitation" in t for t in chan_texts)
+        assert any("<@U_ADMIN>" in t for t in chan_texts)
+
+        # Caller should also get a DM confirmation
+        dm_texts = _dm_messages(client)
+        assert any("octocat" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     async def test_invalid_username_rejected(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["I don't know"])
 
@@ -80,7 +104,7 @@ class TestBareUsername:
         """Passing a full GitHub URL should extract and validate the username."""
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         with (
             patch("nf_core_bot.commands.github.invite_flow.invite_to_org") as mock_org,
@@ -110,33 +134,35 @@ class TestSlackMention:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["<@U01234TARGET>"])
 
         mock_ghuser.assert_awaited_once_with(client, "U01234TARGET")
         mock_org.assert_awaited_once_with("octocat")
-        # Success message should greet the target user by Slack mention
-        last_call = client.chat_postMessage.call_args_list[-1]
-        text = last_call.kwargs["text"]
-        assert "<@U01234TARGET>" in text  # greeting addresses the target
-        assert "<@U_ADMIN>" in text  # mentions who triggered it
+
+        # Channel reply should greet the target user
+        chan_texts = _channel_messages(client)
+        assert any("<@U01234TARGET>" in t for t in chan_texts)
+        assert any("<@U_ADMIN>" in t for t in chan_texts)
+
+        # DM confirmation should be sent
+        dm_texts = _dm_messages(client)
+        assert any("octocat" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member.get_github_username", return_value=None)
     async def test_mention_missing_github_warns(self, _mock_ghuser: AsyncMock, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(thread_ts="123"), ["<@U01234TARGET>"])
 
         # Should post a warning about missing GitHub username
         client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "GitHub username" in text
+        chan_texts = _channel_messages(client)
+        assert any("GitHub username" in t for t in chan_texts)
 
 
 # ── No-argument usage ────────────────────────────────────────────────
@@ -147,7 +173,7 @@ class TestNoArgs:
     async def test_no_args_shows_usage(self, _perm: AsyncMock) -> None:
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), [])
 
@@ -166,15 +192,12 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "Failed to reach the GitHub API" in text
+        chan_texts = _channel_messages(client)
+        assert any("Failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
@@ -183,15 +206,12 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "Failed to invite" in text
+        chan_texts = _channel_messages(client)
+        assert any("Failed to invite" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
@@ -202,15 +222,12 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "failed to reach the GitHub API" in text
+        chan_texts = _channel_messages(client)
+        assert any("failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
@@ -221,12 +238,64 @@ class TestGitHubApiErrors:
 
         ack = AsyncMock()
         respond = AsyncMock()
-        client = AsyncMock()
+        client = _make_client()
 
         await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
 
-        client.chat_postMessage.assert_awaited()
-        text = client.chat_postMessage.call_args.kwargs.get(
-            "text", client.chat_postMessage.call_args[1].get("text", "")
-        )
-        assert "failed to add to the" in text
+        chan_texts = _channel_messages(client)
+        assert any("failed to add to the" in t for t in chan_texts)
+
+
+# ── DM failsafe ──────────────────────────────────────────────────────
+
+
+class TestDmFailsafe:
+    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
+    async def test_dm_sent_on_success(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+        """Caller always receives a DM confirmation on success."""
+        mock_org.return_value = GitHubResult(ok=True, message="ok")
+        mock_team.return_value = GitHubResult(ok=True, message="ok")
+
+        ack = AsyncMock()
+        respond = AsyncMock()
+        client = _make_client()
+
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
+
+        client.conversations_open.assert_awaited()
+        dm_texts = _dm_messages(client)
+        assert any("octocat" in t and "invited" in t for t in dm_texts)
+
+    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
+    async def test_dm_fallback_when_channel_reply_fails(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        """When channel reply fails, caller gets the message via DM instead."""
+        mock_org.return_value = GitHubResult(ok=True, message="ok")
+        mock_team.return_value = GitHubResult(ok=True, message="ok")
+
+        ack = AsyncMock()
+        respond = AsyncMock()
+        client = _make_client()
+
+        # First chat_postMessage (channel reply) fails, subsequent ones (DMs) succeed
+        call_count = 0
+
+        async def _side_effect(**kwargs: str) -> dict:  # type: ignore[type-arg]
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("channel_not_found")
+            return {"ok": True}
+
+        client.chat_postMessage.side_effect = _side_effect
+
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
+
+        # DM should still be sent
+        client.conversations_open.assert_awaited()
+        assert call_count >= 2  # channel reply failed + DM sent

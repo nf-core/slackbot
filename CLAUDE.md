@@ -111,7 +111,7 @@ members have been assigned in the current window, it cycles through again.
 - Two-tier permissions: `@core-team` Slack user group = global admin, site
   organisers = scoped to their hackathon site
 - All bot responses are ephemeral (only visible to the caller) unless explicitly
-  posting to a channel (e.g. `github add-member` posts visible thread replies)
+  posting to a channel (e.g. `github add` posts visible thread replies)
 - Form YAML supports `options_from: sites` for dynamic option lists populated
   from DynamoDB, and `options_from: countries` for type-ahead country search
 - GitHub API calls use a fine-grained PAT with `admin:org` scope
