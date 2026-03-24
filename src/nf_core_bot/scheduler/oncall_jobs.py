@@ -236,11 +236,14 @@ async def _process_reminders(client: AsyncWebClient, now_utc: datetime.datetime)
         one_week_before = week_date - datetime.timedelta(weeks=1)
         week_end = week_date + datetime.timedelta(days=6)
 
-        # Quick date check: skip entries that cannot trigger any action today
+        # Quick date check: skip entries that cannot trigger any action today.
+        # The daily-reminder block uses the user's local date (which can be up
+        # to ±1 day from UTC), so we widen the window by 1 day on each side to
+        # avoid prematurely skipping entries for users far ahead/behind UTC.
         is_announcement_day = today == week_date
         is_week_before_day = today == one_week_before
-        is_during_week = week_date <= today <= week_end
-        if not (is_announcement_day or is_week_before_day or is_during_week):
+        is_near_week = (week_date - datetime.timedelta(days=1)) <= today <= (week_end + datetime.timedelta(days=1))
+        if not (is_week_before_day or is_near_week):
             continue
 
         tracking = await get_reminder_tracking(week_start)
@@ -264,33 +267,113 @@ async def _process_reminders(client: AsyncWebClient, now_utc: datetime.datetime)
             tracking["week_before_sent"] = True
             await save_reminder_tracking(week_start, tracking)
 
-        # --- Daily reminder during on-call week (Mon–Sun, 8am user tz) ---
-        if is_during_week:
-            today_str = today.isoformat()
-            daily_sent: list[str] = tracking.get("daily_sent", [])
-            if today_str not in daily_sent and await _is_user_local_morning(client, user_id, now_utc):
-                if today == week_date:
-                    msg = (
-                        ":saluting_face: Heads up — you're on call this week! Thanks for keeping the community running."
-                    )
-                else:
-                    msg = ":saluting_face: Reminder: you're on call today. Thanks for being there!"
-                await client.chat_postMessage(channel=user_id, text=msg)
-                daily_sent.append(today_str)
-                tracking["daily_sent"] = daily_sent
-                await save_reminder_tracking(week_start, tracking)
+        # --- Daily reminder during on-call week (Mon–Fri, 8am user tz) ---
+        # Use the user's local date for the week-range check so that
+        # users in timezones far ahead of or behind UTC aren't matched
+        # against the wrong week.
+        if is_near_week:
+            user_local_dt = await _get_user_local_datetime(client, user_id, now_utc)
+            user_local_date = user_local_dt.date()
+            user_in_week = week_date <= user_local_date <= week_end
 
+            # Only send Mon–Fri (weekday 0–4); skip weekends.
+            is_weekday = user_local_date.weekday() < 5
+
+            if user_in_week and is_weekday and user_local_dt.hour == 8:
+                local_date_str = user_local_date.isoformat()
+                daily_sent: list[str] = tracking.get("daily_sent", [])
+                if local_date_str not in daily_sent:
+                    if user_local_date == week_date:
+                        msg = (
+                            ":saluting_face: Heads up — you're on call this week!"
+                            " Thanks for keeping the community running."
+                        )
+                    else:
+                        msg = ":saluting_face: Reminder: you're on call today. Thanks for being there!"
+                    await client.chat_postMessage(channel=user_id, text=msg)
+                    daily_sent.append(local_date_str)
+                    tracking["daily_sent"] = daily_sent
+                    await save_reminder_tracking(week_start, tracking)
+
+
+# ---------------------------------------------------------------------------
+# Channel-ID resolution (cached for process lifetime)
+# ---------------------------------------------------------------------------
+
+_channel_id: str | None = None
+_channel_id_lock: asyncio.Lock | None = None
+
+
+def _get_channel_lock() -> asyncio.Lock:
+    global _channel_id_lock  # noqa: PLW0603
+    if _channel_id_lock is None:
+        _channel_id_lock = asyncio.Lock()
+    return _channel_id_lock
+
+
+async def _resolve_channel_id(client: AsyncWebClient) -> str | None:
+    """Look up the #core channel ID by name and cache it for the process lifetime.
+
+    Paginates through ``conversations.list`` (public + private channels the bot
+    is a member of) until a match on ``config.ONCALL_CHANNEL`` is found.
+    Returns ``None`` if the channel cannot be found (the bot may not be a member).
+    """
+    global _channel_id  # noqa: PLW0603
+    if _channel_id is not None:
+        return _channel_id
+
+    async with _get_channel_lock():
+        # Double-check after acquiring lock
+        if _channel_id is not None:
+            return _channel_id
+
+        target_name = config.ONCALL_CHANNEL or "core"
+        cursor: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {
+                "types": "public_channel,private_channel",
+                "exclude_archived": True,
+                "limit": 200,
+            }
+            if cursor:
+                kwargs["cursor"] = cursor
+
+            try:
+                resp = await client.conversations_list(**kwargs)
+            except Exception:
+                logger.exception("Failed to list conversations while resolving #%s channel ID", target_name)
+                return None
+
+            channels: list[dict[str, Any]] = resp.get("channels", [])
+            for ch_dict in channels:
+                if ch_dict.get("name") == target_name:
+                    _channel_id = ch_dict["id"]
+                    logger.info("Resolved #%s → %s", target_name, _channel_id)
+                    return _channel_id
+
+            meta: dict[str, Any] = resp.get("response_metadata", {})
+            cursor = meta.get("next_cursor")
+            if not cursor:
+                break
+
+        logger.warning("Could not find channel #%s — is the bot a member?", target_name)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Timezone helpers
+# ---------------------------------------------------------------------------
 
 _tz_cache: dict[str, tuple[int, float]] = {}  # user_id → (tz_offset, fetched_at)
 _TZ_CACHE_TTL = 86400.0  # 24 hours
 
 
-async def _is_user_local_morning(
+async def _get_user_local_datetime(
     client: AsyncWebClient,
     user_id: str,
     now_utc: datetime.datetime,
-) -> bool:
-    """Return True if it is 08:00 in the user's Slack timezone."""
+) -> datetime.datetime:
+    """Return *now_utc* converted to the user's Slack timezone."""
     now_ts = now_utc.timestamp()
     cached = _tz_cache.get(user_id)
     if cached and (now_ts - cached[1]) < _TZ_CACHE_TTL:
@@ -304,7 +387,16 @@ async def _is_user_local_morning(
         _tz_cache[user_id] = (tz_offset, now_ts)
 
     user_tz = datetime.timezone(datetime.timedelta(seconds=tz_offset))
-    user_local = now_utc.astimezone(user_tz)
+    return now_utc.astimezone(user_tz)
+
+
+async def _is_user_local_morning(
+    client: AsyncWebClient,
+    user_id: str,
+    now_utc: datetime.datetime,
+) -> bool:
+    """Return True if it is 08:00 in the user's Slack timezone."""
+    user_local = await _get_user_local_datetime(client, user_id, now_utc)
     return user_local.hour == 8
 
 
@@ -327,9 +419,13 @@ async def _send_channel_announcement(
 ) -> None:
     """Post to #core announcing who is on call this week."""
     week_range = format_week_range(week_start)
+    channel = await _resolve_channel_id(client)
+    if channel is None:
+        logger.error("Cannot post on-call announcement — #core channel not resolved")
+        return
     try:
         await client.chat_postMessage(
-            channel="core",
+            channel=channel,
             text=f":mega: <@{user_id}> is on call this week (*{week_range}*).",
         )
     except Exception:
@@ -339,9 +435,13 @@ async def _send_channel_announcement(
 async def _warn_unassigned(client: AsyncWebClient, week_start: str) -> None:
     """Warn #core that a week has no one assigned."""
     week_range = format_week_range(week_start)
+    channel = await _resolve_channel_id(client)
+    if channel is None:
+        logger.error("Cannot post unassigned-week warning — #core channel not resolved")
+        return
     try:
         await client.chat_postMessage(
-            channel="core",
+            channel=channel,
             text=(
                 f":warning: The on-call week of *{week_range}* has no one assigned. "
                 f"Everyone is marked as unavailable. Please coordinate manually."

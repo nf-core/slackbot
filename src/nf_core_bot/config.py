@@ -24,6 +24,8 @@ _DEFAULTS: dict[str, str | None] = {
     "AWS_REGION": "eu-west-1",
     # Permissions
     "CORE_TEAM_USERGROUP_HANDLE": "core-team",
+    # Channels
+    "ONCALL_CHANNEL": "core",
 }
 
 _REQUIRED: frozenset[str] = frozenset(["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET", "SLACK_APP_TOKEN", "GITHUB_TOKEN"])
