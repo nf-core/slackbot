@@ -6,6 +6,7 @@ import datetime
 import logging
 from typing import TYPE_CHECKING
 
+from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.commands.oncall.helpers import (
     current_week_start,
     format_week_range,
@@ -114,6 +115,10 @@ async def handle_oncall_unavailable(
             await update_roster_assignment(week, "", "skipped")
 
     await respond(text="\n".join(msg_parts), response_type="ephemeral")
+
+    # Regenerate calendars if any weeks were reassigned
+    if my_overlapping:
+        await safe_regenerate_calendars(client)
 
 
 def _week_overlaps(week_start: str, range_start: str, range_end: str) -> bool:

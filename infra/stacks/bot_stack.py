@@ -10,11 +10,15 @@ from aws_cdk import (
     RemovalPolicy,
     Tags,
     CfnOutput,
+    Duration,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_dynamodb as dynamodb,
     aws_ssm as ssm,
     aws_logs as logs,
+    aws_s3 as s3,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
 )
 from constructs import Construct
 
@@ -64,6 +68,37 @@ class NfCoreBotStack(Stack):
             partition_key=dynamodb.Attribute(name="GSI1PK", type=dynamodb.AttributeType.STRING),
             sort_key=dynamodb.Attribute(name="GSI1SK", type=dynamodb.AttributeType.STRING),
             projection_type=dynamodb.ProjectionType.ALL,
+        )
+
+        # ----------------------------------------------------------------------
+        # S3 + CloudFront - iCal calendar feeds for on-call rosters.
+        # Files are stored under an obfuscation token prefix so URLs
+        # are unguessable but shareable (no auth required).
+        # ----------------------------------------------------------------------
+        calendar_bucket = s3.Bucket(
+            self,
+            "CalendarBucket",
+            bucket_name="nf-core-bot-calendars",
+            removal_policy=RemovalPolicy.RETAIN,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+        )
+
+        calendar_distribution = cloudfront.Distribution(
+            self,
+            "CalendarCDN",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3BucketOrigin.with_origin_access_identity(calendar_bucket),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                cache_policy=cloudfront.CachePolicy(
+                    self,
+                    "CalendarCachePolicy",
+                    default_ttl=Duration.minutes(5),
+                    max_ttl=Duration.hours(1),
+                    min_ttl=Duration.minutes(1),
+                ),
+            ),
+            comment="nf-core on-call calendar feeds",
         )
 
         # ----------------------------------------------------------------------
@@ -124,6 +159,8 @@ class NfCoreBotStack(Stack):
                 "AWS_DEFAULT_REGION": "eu-west-1",
                 "DYNAMODB_TABLE": "nf-core-bot",
                 "CORE_TEAM_USERGROUP_HANDLE": "core-team",
+                "CALENDAR_S3_BUCKET": calendar_bucket.bucket_name,
+                "CALENDAR_CLOUDFRONT_DOMAIN": calendar_distribution.distribution_domain_name,
             },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="bot",
@@ -133,6 +170,9 @@ class NfCoreBotStack(Stack):
 
         # Grant the task role read/write access to the DynamoDB table
         table.grant_read_write_data(task_definition.task_role)
+
+        # Grant the task role write access to the calendar S3 bucket
+        calendar_bucket.grant_write(task_definition.task_role)
 
         # ----------------------------------------------------------------------
         # Fargate Service - single task, public IP for outbound internet.
@@ -165,3 +205,5 @@ class NfCoreBotStack(Stack):
         CfnOutput(self, "ClusterName", value=cluster.cluster_name)
         CfnOutput(self, "ServiceName", value=service.service_name)
         CfnOutput(self, "TableName", value=table.table_name)
+        CfnOutput(self, "CalendarBucketName", value=calendar_bucket.bucket_name)
+        CfnOutput(self, "CalendarDomain", value=calendar_distribution.distribution_domain_name)

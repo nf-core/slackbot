@@ -26,6 +26,9 @@ _DEFAULTS: dict[str, str | None] = {
     "CORE_TEAM_USERGROUP_HANDLE": "core-team",
     # Channels
     "ONCALL_CHANNEL": "core",
+    # Calendar (S3 + CloudFront)
+    "CALENDAR_S3_BUCKET": None,
+    "CALENDAR_CLOUDFRONT_DOMAIN": None,
 }
 
 _REQUIRED: frozenset[str] = frozenset(["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET", "SLACK_APP_TOKEN", "GITHUB_TOKEN"])

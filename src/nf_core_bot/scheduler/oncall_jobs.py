@@ -13,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
+from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.commands.oncall.helpers import format_week_range, monday_of_week
 from nf_core_bot.db.oncall import (
     delete_roster_entry,
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient
 
 logger = logging.getLogger(__name__)
+
 
 # How many weeks ahead the schedule should extend.
 SCHEDULE_WEEKS_AHEAD = 8
@@ -89,6 +91,7 @@ async def _tick(client: AsyncWebClient) -> None:
     if is_monday_morning and _last_weekly_run != today_str:
         await _maybe_extend_roster(client, today)
         await _cleanup_old_entries(today)
+        await safe_regenerate_calendars(client)
         _last_weekly_run = today_str
 
     # ── Reminders ────────────────────────────────────────────────────
