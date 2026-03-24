@@ -71,13 +71,13 @@ class TestCalendarGeneration:
         ical_bytes = await generate_global_calendar(slack_client)
         text = ical_bytes.decode()
 
-        assert "On-call: Alice" in text
-        assert "On-call: Bob" in text
+        assert "nf-core on-call: Alice" in text
+        assert "nf-core on-call: Bob" in text
         assert text.count("BEGIN:VEVENT") == 2
 
     @pytest.mark.usefixtures("_clear_name_cache")
-    async def test_global_calendar_unassigned_week(self, ddb_table: Any, slack_client: AsyncMock) -> None:
-        """Unassigned weeks show as 'On-call (unassigned)'."""
+    async def test_global_calendar_skips_unassigned_week(self, ddb_table: Any, slack_client: AsyncMock) -> None:
+        """Unassigned weeks produce no calendar event."""
         from nf_core_bot.db.oncall import put_roster_entry
 
         await put_roster_entry("2026-04-06", "")
@@ -87,7 +87,7 @@ class TestCalendarGeneration:
         ical_bytes = await generate_global_calendar(slack_client)
         text = ical_bytes.decode()
 
-        assert "On-call (unassigned)" in text
+        assert "BEGIN:VEVENT" not in text
 
     @pytest.mark.usefixtures("_clear_name_cache")
     async def test_personal_calendar_filters_to_user(self, ddb_table: Any, slack_client: AsyncMock) -> None:
@@ -104,7 +104,7 @@ class TestCalendarGeneration:
         text = ical_bytes.decode()
 
         assert text.count("BEGIN:VEVENT") == 2
-        assert "On-call" in text
+        assert "nf-core on-call: Alice" in text
 
     @pytest.mark.usefixtures("_clear_name_cache")
     async def test_personal_calendar_empty_for_unassigned_user(self, ddb_table: Any, slack_client: AsyncMock) -> None:
@@ -149,7 +149,7 @@ class TestCalendarGeneration:
         ical_bytes = await generate_global_calendar(slack_client)
         text = ical_bytes.decode()
 
-        assert "On-call: U_UNKNOWN" in text
+        assert "nf-core on-call: U_UNKNOWN" in text
 
 
 # ---------------------------------------------------------------------------

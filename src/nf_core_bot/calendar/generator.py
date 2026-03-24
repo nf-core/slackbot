@@ -98,10 +98,9 @@ async def generate_global_calendar(client: AsyncWebClient, roster: list[dict[str
     for entry in roster:
         user_id = entry.get("assigned_user_id", "")
         if not user_id:
-            summary = "On-call (unassigned)"
-        else:
-            name = await _resolve_display_name(client, user_id)
-            summary = f"On-call: {name}"
+            continue
+        name = await _resolve_display_name(client, user_id)
+        summary = f"nf-core on-call: {name}"
         cal.add_component(_make_event(entry["week_start"], summary, "global"))
 
     return bytes(cal.to_ical())
@@ -118,7 +117,7 @@ async def generate_personal_calendar(
 
     for entry in roster:
         if entry.get("assigned_user_id") == user_id:
-            cal.add_component(_make_event(entry["week_start"], "On-call", user_id))
+            cal.add_component(_make_event(entry["week_start"], f"nf-core on-call: {name}", user_id))
 
     return bytes(cal.to_ical())
 
