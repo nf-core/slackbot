@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.db.oncall import delete_roster_entry, list_roster, save_round_robin_state
 from nf_core_bot.scheduler.oncall_jobs import _maybe_extend_roster
 
@@ -49,3 +50,5 @@ async def handle_oncall_reboot(
         text=f"On-call schedule rebooted. Deleted {deleted} old entries, created {week_count} new weeks.",
         response_type="ephemeral",
     )
+
+    await safe_regenerate_calendars(client)

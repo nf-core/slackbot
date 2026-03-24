@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.commands.oncall.helpers import (
     current_week_start,
     format_week_range,
@@ -118,3 +119,5 @@ async def handle_oncall_switch(
         ),
         response_type="ephemeral",
     )
+
+    await safe_regenerate_calendars(client)

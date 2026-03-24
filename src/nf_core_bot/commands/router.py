@@ -31,6 +31,7 @@ from nf_core_bot.commands.hackathon.register import (
     handle_register,
 )
 from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help, handle_oncall_help
+from nf_core_bot.commands.oncall.calendar_cmd import handle_oncall_calendar
 from nf_core_bot.commands.oncall.list_cmd import handle_oncall_list
 from nf_core_bot.commands.oncall.me import handle_oncall_me
 from nf_core_bot.commands.oncall.reboot import handle_oncall_reboot
@@ -250,6 +251,7 @@ _ONCALL_DISPATCH: dict[str, object] = {
     "skip": handle_oncall_skip,
     "unavailable": handle_oncall_unavailable,
     "reboot": handle_oncall_reboot,
+    "calendar": handle_oncall_calendar,
 }
 
 
@@ -293,7 +295,7 @@ async def _route_oncall(
         await handler(respond)  # type: ignore[operator]
     elif sub == "me":
         await handler(respond, user_id)  # type: ignore[operator]
-    elif sub in ("switch", "unavailable"):
+    elif sub in ("switch", "unavailable", "calendar"):
         await handler(respond, client, user_id, rest)  # type: ignore[operator]
     else:
         # skip, reboot: (respond, client, user_id)

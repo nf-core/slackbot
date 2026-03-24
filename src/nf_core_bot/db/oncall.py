@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import secrets
 from typing import Any
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -352,3 +353,60 @@ async def save_reminder_tracking(week_start: str, data: dict[str, Any]) -> None:
         )
 
     await asyncio.to_thread(_put)
+
+
+# ---------------------------------------------------------------------------
+# Calendar token management
+# ---------------------------------------------------------------------------
+
+CALENDAR_TOKEN_SK = "CALENDAR_TOKEN"
+
+
+async def get_calendar_token() -> str | None:
+    """Return the calendar obfuscation token, or None if not yet created."""
+    table = get_table()
+
+    def _get() -> Any:
+        return table.get_item(Key={"PK": META_PK, "SK": CALENDAR_TOKEN_SK})
+
+    resp = await asyncio.to_thread(_get)
+    item: dict[str, Any] | None = resp.get("Item")
+    if item:
+        return str(item.get("token", ""))
+    return None
+
+
+async def get_or_create_calendar_token() -> str:
+    """Return the existing calendar token or create a new one.
+
+    The token is a URL-safe random string used to obfuscate calendar URLs.
+    Uses a conditional put to avoid race conditions when two callers
+    try to create simultaneously.
+    """
+    existing = await get_calendar_token()
+    if existing:
+        return existing
+
+    token = secrets.token_urlsafe(32)
+    table = get_table()
+
+    def _put() -> None:
+        table.put_item(
+            Item={
+                "PK": META_PK,
+                "SK": CALENDAR_TOKEN_SK,
+                "token": token,
+                "created_at": _now_iso(),
+            },
+            ConditionExpression="attribute_not_exists(PK)",
+        )
+
+    try:
+        await asyncio.to_thread(_put)
+        logger.info("Created new calendar obfuscation token")
+        return token
+    except table.meta.client.exceptions.ConditionalCheckFailedException:
+        # Another caller beat us — read the token they created.
+        winner = await get_calendar_token()
+        assert winner is not None  # noqa: S101
+        return winner

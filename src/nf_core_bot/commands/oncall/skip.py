@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
+from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.commands.oncall.helpers import current_week_start, format_week_range
 from nf_core_bot.db.oncall import (
     add_to_queue_front,
@@ -90,6 +91,8 @@ async def handle_oncall_skip(
         text=f":white_check_mark: Skipped! <@{replacement}> will cover *{week_range}* for you.",
         response_type="ephemeral",
     )
+
+    await safe_regenerate_calendars(client)
 
 
 async def find_skip_replacement(
