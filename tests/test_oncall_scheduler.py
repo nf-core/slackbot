@@ -10,10 +10,11 @@ import pytest
 
 @pytest.fixture
 def client() -> AsyncMock:
-    # Clear the timezone cache so tests are isolated
-    from nf_core_bot.scheduler.oncall_jobs import _tz_cache
+    # Clear the timezone cache and channel-ID cache so tests are isolated
+    import nf_core_bot.scheduler.oncall_jobs as jobs
 
-    _tz_cache.clear()
+    jobs._tz_cache.clear()
+    jobs._channel_id = None
 
     mock = AsyncMock()
     # Default users_info response for timezone lookups
@@ -217,8 +218,9 @@ class TestMaybeExtendRoster:
 
 
 class TestProcessReminders:
+    @patch("nf_core_bot.scheduler.oncall_jobs._resolve_channel_id", new_callable=AsyncMock, return_value="C_CORE")
     @patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock)
-    async def test_monday_announcement(self, mock_roster, ddb_table, client) -> None:
+    async def test_monday_announcement(self, mock_roster, _mock_ch, ddb_table, client) -> None:
         from nf_core_bot.db.oncall import get_reminder_tracking
         from nf_core_bot.scheduler.oncall_jobs import TARGET_HOUR_UTC, _process_reminders
 
@@ -234,10 +236,11 @@ class TestProcessReminders:
             mock_dt.timedelta = datetime.timedelta
             mock_dt.timezone = datetime.timezone
             mock_dt.UTC = datetime.UTC
+            mock_dt.datetime = datetime.datetime
             await _process_reminders(client, now)
 
-        # Should have posted to #core
-        channel_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "core"]
+        # Should have posted to #core (resolved to C_CORE)
+        channel_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "C_CORE"]
         assert len(channel_calls) == 1
         assert "<@U111>" in channel_calls[0].kwargs["text"]
 
@@ -353,6 +356,95 @@ class TestProcessReminders:
 
         client.chat_postMessage.assert_not_awaited()
 
+    async def test_nz_user_gets_correct_week_dm(self, ddb_table, client) -> None:
+        """Regression: NZ user (UTC+12) at 8am Monday local (Sunday 20:00 UTC)
+        should receive a DM for the Monday-starting week, not the previous week."""
+        from nf_core_bot.db.oncall import get_reminder_tracking
+        from nf_core_bot.scheduler.oncall_jobs import _process_reminders
+
+        # NZ timezone: UTC+12
+        client.users_info.return_value = {"user": {"tz_offset": 43200}}
+
+        # Roster: previous week (March 30) and current week (April 6)
+        with patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock) as mock_roster_fn:
+            mock_roster_fn.return_value = [
+                {"week_start": "2026-03-30", "assigned_user_id": "U_OTHER", "status": "completed"},
+                {"week_start": "2026-04-06", "assigned_user_id": "U_NZ", "status": "scheduled"},
+            ]
+
+            # Sunday 20:00 UTC = Monday 08:00 NZ
+            now = datetime.datetime(2026, 4, 5, 20, 0, tzinfo=datetime.UTC)
+            with patch("nf_core_bot.scheduler.oncall_jobs.datetime") as mock_dt:
+                mock_dt.date.today.return_value = datetime.date(2026, 4, 5)  # UTC: Sunday
+                mock_dt.date.fromisoformat = datetime.date.fromisoformat
+                mock_dt.timedelta = datetime.timedelta
+                mock_dt.timezone = datetime.timezone
+                mock_dt.UTC = datetime.UTC
+                mock_dt.datetime = datetime.datetime
+                await _process_reminders(client, now)
+
+        # Should have sent a DM to NZ user for the April 6 week
+        calls = client.chat_postMessage.call_args_list
+        dm_calls = [c for c in calls if c.kwargs.get("channel") == "U_NZ"]
+        assert len(dm_calls) == 1
+        assert "on call this week" in dm_calls[0].kwargs["text"]
+
+        # Tracking should show local date (2026-04-06), not UTC date (2026-04-05)
+        tracking = await get_reminder_tracking("2026-04-06")
+        assert "2026-04-06" in tracking.get("daily_sent", [])
+
+    async def test_no_dm_on_weekends(self, ddb_table, client) -> None:
+        """Daily reminders should only be sent Mon–Fri, not on weekends."""
+        from nf_core_bot.scheduler.oncall_jobs import _process_reminders
+
+        # Default tz_offset=0 (UTC)
+        client.users_info.return_value = {"user": {"tz_offset": 0}}
+
+        with patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock) as mock_roster_fn:
+            mock_roster_fn.return_value = [
+                {"week_start": "2026-04-06", "assigned_user_id": "U_ONCALL", "status": "scheduled"},
+            ]
+
+            # Saturday April 11, 2026 at 08:00 UTC (weekday=5)
+            now = datetime.datetime(2026, 4, 11, 8, 0, tzinfo=datetime.UTC)
+            with patch("nf_core_bot.scheduler.oncall_jobs.datetime") as mock_dt:
+                mock_dt.date.today.return_value = datetime.date(2026, 4, 11)
+                mock_dt.date.fromisoformat = datetime.date.fromisoformat
+                mock_dt.timedelta = datetime.timedelta
+                mock_dt.timezone = datetime.timezone
+                mock_dt.UTC = datetime.UTC
+                mock_dt.datetime = datetime.datetime
+                await _process_reminders(client, now)
+
+        # No daily DM should have been sent on Saturday
+        dm_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "U_ONCALL"]
+        assert len(dm_calls) == 0
+
+    async def test_no_dm_on_sunday(self, ddb_table, client) -> None:
+        """Sunday should also be skipped for daily reminders."""
+        from nf_core_bot.scheduler.oncall_jobs import _process_reminders
+
+        client.users_info.return_value = {"user": {"tz_offset": 0}}
+
+        with patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock) as mock_roster_fn:
+            mock_roster_fn.return_value = [
+                {"week_start": "2026-04-06", "assigned_user_id": "U_ONCALL", "status": "scheduled"},
+            ]
+
+            # Sunday April 12, 2026 at 08:00 UTC (weekday=6)
+            now = datetime.datetime(2026, 4, 12, 8, 0, tzinfo=datetime.UTC)
+            with patch("nf_core_bot.scheduler.oncall_jobs.datetime") as mock_dt:
+                mock_dt.date.today.return_value = datetime.date(2026, 4, 12)
+                mock_dt.date.fromisoformat = datetime.date.fromisoformat
+                mock_dt.timedelta = datetime.timedelta
+                mock_dt.timezone = datetime.timezone
+                mock_dt.UTC = datetime.UTC
+                mock_dt.datetime = datetime.datetime
+                await _process_reminders(client, now)
+
+        dm_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "U_ONCALL"]
+        assert len(dm_calls) == 0
+
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -443,3 +535,77 @@ class TestIsUserLocalMorning:
 
         # Falls back to UTC
         assert await _is_user_local_morning(client, "U111", now) is True
+
+
+# ---------------------------------------------------------------------------
+# Channel-ID resolution
+# ---------------------------------------------------------------------------
+
+
+class TestResolveChannelId:
+    async def test_finds_channel_by_name(self, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _resolve_channel_id
+
+        client.conversations_list.return_value = {
+            "channels": [
+                {"name": "general", "id": "C_GENERAL"},
+                {"name": "core", "id": "C_CORE"},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        result = await _resolve_channel_id(client)
+        assert result == "C_CORE"
+
+    async def test_paginates(self, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _resolve_channel_id
+
+        # First page: no match, has cursor
+        # Second page: match
+        client.conversations_list.side_effect = [
+            {
+                "channels": [{"name": "general", "id": "C_GENERAL"}],
+                "response_metadata": {"next_cursor": "page2"},
+            },
+            {
+                "channels": [{"name": "core", "id": "C_CORE"}],
+                "response_metadata": {"next_cursor": ""},
+            },
+        ]
+
+        result = await _resolve_channel_id(client)
+        assert result == "C_CORE"
+        assert client.conversations_list.await_count == 2
+
+    async def test_returns_none_when_not_found(self, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _resolve_channel_id
+
+        client.conversations_list.return_value = {
+            "channels": [{"name": "general", "id": "C_GENERAL"}],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        result = await _resolve_channel_id(client)
+        assert result is None
+
+    async def test_caches_result(self, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _resolve_channel_id
+
+        client.conversations_list.return_value = {
+            "channels": [{"name": "core", "id": "C_CORE"}],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        # Call twice — API should only be hit once
+        result1 = await _resolve_channel_id(client)
+        result2 = await _resolve_channel_id(client)
+        assert result1 == result2 == "C_CORE"
+        assert client.conversations_list.await_count == 1
+
+    async def test_handles_api_error(self, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _resolve_channel_id
+
+        client.conversations_list.side_effect = Exception("Slack API error")
+
+        result = await _resolve_channel_id(client)
+        assert result is None
