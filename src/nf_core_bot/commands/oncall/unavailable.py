@@ -1,4 +1,11 @@
-"""``/nf-core on-call unavailable <start> <end>`` — mark the caller as unavailable."""
+"""``/nf-core on-call unavailable`` — manage the caller's unavailability ranges.
+
+Subcommands:
+
+* ``unavailable YYYY-MM-DD YYYY-MM-DD`` — mark the caller as unavailable.
+* ``unavailable list`` — list the caller's stored unavailability ranges.
+* ``unavailable remove YYYY-MM-DD YYYY-MM-DD`` — remove a previously stored range.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,8 @@ from nf_core_bot.db.oncall import (
     add_to_queue_front,
     add_unavailability,
     list_roster,
+    list_unavailability,
+    remove_unavailability,
     update_roster_assignment,
 )
 
@@ -26,8 +35,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+USAGE = (
+    "Usage:\n"
+    "  `/nf-core on-call unavailable YYYY-MM-DD YYYY-MM-DD` — mark a date range as unavailable\n"
+    "  `/nf-core on-call unavailable list` — list your unavailable date ranges\n"
+    "  `/nf-core on-call unavailable remove YYYY-MM-DD YYYY-MM-DD` — remove a date range"
+)
+
 
 async def handle_oncall_unavailable(
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    args: list[str],
+) -> None:
+    """Dispatch to the correct unavailable subcommand based on *args*."""
+
+    if not args:
+        await respond(text=USAGE, response_type="ephemeral")
+        return
+
+    sub = args[0].lower()
+    if sub == "list":
+        await _handle_list(respond, user_id)
+        return
+    if sub == "remove":
+        await _handle_remove(respond, user_id, args[1:])
+        return
+
+    await _handle_add(respond, client, user_id, args)
+
+
+async def _handle_add(
     respond: Respond,
     client: AsyncWebClient,
     user_id: str,
@@ -36,10 +75,7 @@ async def handle_oncall_unavailable(
     """Mark the caller as unavailable between two dates (inclusive)."""
 
     if len(args) < 2:
-        await respond(
-            text="Usage: `/nf-core on-call unavailable YYYY-MM-DD YYYY-MM-DD`",
-            response_type="ephemeral",
-        )
+        await respond(text=USAGE, response_type="ephemeral")
         return
 
     try:
@@ -119,6 +155,82 @@ async def handle_oncall_unavailable(
     # Regenerate calendars if any weeks were reassigned
     if my_overlapping:
         await safe_regenerate_calendars(client)
+
+
+async def _handle_list(respond: Respond, user_id: str) -> None:
+    """Show the caller's stored unavailability ranges (only current/future)."""
+
+    entries = await list_unavailability(user_id)
+    today = datetime.date.today().isoformat()
+    upcoming = [e for e in entries if e["end_date"] >= today]
+    upcoming.sort(key=lambda e: e["start_date"])
+
+    if not upcoming:
+        await respond(
+            text="You have no upcoming unavailable date ranges.",
+            response_type="ephemeral",
+        )
+        return
+
+    lines = [
+        f"• *{_format_range(e['start_date'], e['end_date'])}*  `{e['start_date']} {e['end_date']}`" for e in upcoming
+    ]
+    header = ":calendar: *Your upcoming unavailable date ranges:*\n\n"
+    footer = (
+        "\n\nTo remove a range, run "
+        "`/nf-core on-call unavailable remove YYYY-MM-DD YYYY-MM-DD` "
+        "with the dates shown in backticks."
+    )
+    await respond(text=header + "\n".join(lines) + footer, response_type="ephemeral")
+
+
+async def _handle_remove(respond: Respond, user_id: str, args: list[str]) -> None:
+    """Remove a stored unavailability range matching the given start/end dates."""
+
+    if len(args) < 2:
+        await respond(
+            text="Usage: `/nf-core on-call unavailable remove YYYY-MM-DD YYYY-MM-DD`",
+            response_type="ephemeral",
+        )
+        return
+
+    try:
+        start = parse_date_arg(args[0])
+        end = parse_date_arg(args[1])
+    except ValueError as exc:
+        await respond(text=str(exc), response_type="ephemeral")
+        return
+
+    start_str = start.isoformat()
+    end_str = end.isoformat()
+
+    entries = await list_unavailability(user_id)
+    match = next(
+        (e for e in entries if e["start_date"] == start_str and e["end_date"] == end_str),
+        None,
+    )
+    if match is None:
+        await respond(
+            text=(
+                f"No unavailability range found for *{_format_range(start_str, end_str)}*. "
+                "Run `/nf-core on-call unavailable list` to see your ranges."
+            ),
+            response_type="ephemeral",
+        )
+        return
+
+    await remove_unavailability(user_id, start_str, end_str)
+    await respond(
+        text=f":white_check_mark: Removed unavailability *{_format_range(start_str, end_str)}*.",
+        response_type="ephemeral",
+    )
+
+
+def _format_range(start_str: str, end_str: str) -> str:
+    """Format an ISO date range as ``Apr 6 – Apr 12``."""
+    start = datetime.date.fromisoformat(start_str)
+    end = datetime.date.fromisoformat(end_str)
+    return f"{start.strftime('%b %-d')} – {end.strftime('%b %-d')}"
 
 
 def _week_overlaps(week_start: str, range_start: str, range_end: str) -> bool:
