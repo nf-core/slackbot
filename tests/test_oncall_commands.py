@@ -381,9 +381,7 @@ class TestOncallUnavailableList:
         # Different user — must not appear
         await add_unavailability("U222", "2026-05-20", "2026-05-25")
 
-        with patch("nf_core_bot.commands.oncall.unavailable.datetime") as mock_dt:
-            mock_dt.date.today.return_value = __import__("datetime").date(2026, 5, 2)
-            mock_dt.date.fromisoformat = __import__("datetime").date.fromisoformat
+        with patch("nf_core_bot.commands.oncall.unavailable.today_iso", return_value="2026-05-02"):
             await handle_oncall_unavailable(respond, client, "U111", ["list"])
 
         text = respond.call_args[1]["text"]
@@ -404,9 +402,7 @@ class TestOncallUnavailableList:
         await add_unavailability("U111", "2026-06-01", "2026-06-05")
         await add_unavailability("U111", "2026-07-01", "2026-07-05")
 
-        with patch("nf_core_bot.commands.oncall.unavailable.datetime") as mock_dt:
-            mock_dt.date.today.return_value = __import__("datetime").date(2026, 5, 2)
-            mock_dt.date.fromisoformat = __import__("datetime").date.fromisoformat
+        with patch("nf_core_bot.commands.oncall.unavailable.today_iso", return_value="2026-05-02"):
             await handle_oncall_unavailable(respond, client, "U111", ["list"])
 
         text = respond.call_args[1]["text"]

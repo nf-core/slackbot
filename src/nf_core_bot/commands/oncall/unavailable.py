@@ -16,8 +16,10 @@ from typing import TYPE_CHECKING
 from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.commands.oncall.helpers import (
     current_week_start,
+    format_date_range,
     format_week_range,
     parse_date_arg,
+    today_iso,
 )
 from nf_core_bot.commands.oncall.skip import find_skip_replacement
 from nf_core_bot.db.oncall import (
@@ -105,9 +107,7 @@ async def _handle_add(
     # Store the unavailability
     await add_unavailability(user_id, start_str, end_str)
 
-    msg_parts: list[str] = [
-        f":calendar: Marked you as unavailable *{start.strftime('%b %-d')} – {end.strftime('%b %-d')}*."
-    ]
+    msg_parts: list[str] = [f":calendar: Marked you as unavailable *{format_date_range(start_str, end_str)}*."]
 
     # Check if the caller is already assigned any weeks that overlap
     roster = await list_roster(from_date=current_week_start())
@@ -160,10 +160,9 @@ async def _handle_add(
 async def _handle_list(respond: Respond, user_id: str) -> None:
     """Show the caller's stored unavailability ranges (only current/future)."""
 
+    today = today_iso()
     entries = await list_unavailability(user_id)
-    today = datetime.date.today().isoformat()
-    upcoming = [e for e in entries if e["end_date"] >= today]
-    upcoming.sort(key=lambda e: e["start_date"])
+    upcoming = sorted((e for e in entries if e["end_date"] >= today), key=lambda e: e["start_date"])
 
     if not upcoming:
         await respond(
@@ -173,7 +172,8 @@ async def _handle_list(respond: Respond, user_id: str) -> None:
         return
 
     lines = [
-        f"• *{_format_range(e['start_date'], e['end_date'])}*  `{e['start_date']} {e['end_date']}`" for e in upcoming
+        f"• *{format_date_range(e['start_date'], e['end_date'])}*  `{e['start_date']} {e['end_date']}`"
+        for e in upcoming
     ]
     header = ":calendar: *Your upcoming unavailable date ranges:*\n\n"
     footer = (
@@ -204,33 +204,22 @@ async def _handle_remove(respond: Respond, user_id: str, args: list[str]) -> Non
     start_str = start.isoformat()
     end_str = end.isoformat()
 
-    entries = await list_unavailability(user_id)
-    match = next(
-        (e for e in entries if e["start_date"] == start_str and e["end_date"] == end_str),
-        None,
-    )
-    if match is None:
+    try:
+        await remove_unavailability(user_id, start_str, end_str)
+    except ValueError:
         await respond(
             text=(
-                f"No unavailability range found for *{_format_range(start_str, end_str)}*. "
+                f"No unavailability range found for *{format_date_range(start_str, end_str)}*. "
                 "Run `/nf-core on-call unavailable list` to see your ranges."
             ),
             response_type="ephemeral",
         )
         return
 
-    await remove_unavailability(user_id, start_str, end_str)
     await respond(
-        text=f":white_check_mark: Removed unavailability *{_format_range(start_str, end_str)}*.",
+        text=f":white_check_mark: Removed unavailability *{format_date_range(start_str, end_str)}*.",
         response_type="ephemeral",
     )
-
-
-def _format_range(start_str: str, end_str: str) -> str:
-    """Format an ISO date range as ``Apr 6 – Apr 12``."""
-    start = datetime.date.fromisoformat(start_str)
-    end = datetime.date.fromisoformat(end_str)
-    return f"{start.strftime('%b %-d')} – {end.strftime('%b %-d')}"
 
 
 def _week_overlaps(week_start: str, range_start: str, range_end: str) -> bool:
