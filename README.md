@@ -1,7 +1,7 @@
 # nf-core-bot
 
-A Slack bot for the nf-core community — hackathon registration and GitHub
-organisation tooling.
+A Slack bot for the nf-core community — hackathon registration, GitHub
+organisation tooling, and on-call rotation scheduling.
 
 Built with [Slack Bolt for Python](https://slack.dev/bolt-python/), hosted on
 AWS ECS Fargate + DynamoDB.
@@ -31,6 +31,28 @@ sends them an invite, with membership in the _Collaborators_ team.
 
 The slash commands `/nf-core github add` are mostly for convenience when
 replying elsewhere in Slack.
+
+## On-call Rotation
+
+The bot manages a weekly on-call rotation for `@core-team` members. All on-call
+commands require `@core-team` membership.
+
+```bash
+/nf-core on-call help                                          # On-call help
+/nf-core on-call list                                          # Upcoming schedule
+/nf-core on-call me                                            # Your upcoming weeks
+/nf-core on-call switch [YYYY-MM-DD]                           # Swap your next week
+/nf-core on-call skip                                          # Skip your next week
+/nf-core on-call unavailable YYYY-MM-DD YYYY-MM-DD             # Mark a range unavailable
+/nf-core on-call unavailable list                              # List your unavailable ranges
+/nf-core on-call unavailable remove YYYY-MM-DD YYYY-MM-DD      # Remove a range
+/nf-core on-call calendar all|me                               # Subscribable iCal URL
+/nf-core on-call reboot                                        # Wipe & rebuild schedule
+```
+
+The scheduler picks weekly assignees by round-robin (queue-front priority for
+people who previously skipped), DMs reminders ahead of each shift, and skips
+weeks where the assignee is marked unavailable.
 
 ## Hackathon Registrations
 
