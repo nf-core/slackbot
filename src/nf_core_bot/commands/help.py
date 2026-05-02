@@ -41,6 +41,8 @@ ONCALL_COMMANDS: list[tuple[str, str, str]] = [
     ("on-call switch YYYY-MM-DD", "Swap your next on-call week with the specified week", "admin"),
     ("on-call skip", "Skip your next on-call week (a replacement is assigned)", "admin"),
     ("on-call unavailable YYYY-MM-DD YYYY-MM-DD", "Mark yourself as unavailable for a date range", "admin"),
+    ("on-call unavailable list", "List your unavailable date ranges", "admin"),
+    ("on-call unavailable remove YYYY-MM-DD YYYY-MM-DD", "Remove a previously set unavailable date range", "admin"),
     ("on-call reboot", "Wipe and rebuild the on-call schedule from scratch", "admin"),
     ("on-call calendar all", "Get a subscribable iCal URL for the full on-call schedule", "admin"),
     ("on-call calendar me", "Get a subscribable iCal URL for your on-call weeks", "admin"),

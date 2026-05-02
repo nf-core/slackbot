@@ -15,11 +15,22 @@ def current_week_start() -> str:
     return monday_of_week(datetime.date.today()).isoformat()
 
 
+def today_iso() -> str:
+    """Return today's date as ``YYYY-MM-DD``."""
+    return datetime.date.today().isoformat()
+
+
+def format_date_range(start: str, end: str) -> str:
+    """Format an ISO date range as ``Apr 6 – Apr 12``."""
+    s = datetime.date.fromisoformat(start)
+    e = datetime.date.fromisoformat(end)
+    return f"{s.strftime('%b %-d')} – {e.strftime('%b %-d')}"
+
+
 def format_week_range(week_start: str) -> str:
     """Format a week as ``Apr 6 – Apr 12``."""
-    start = datetime.date.fromisoformat(week_start)
-    end = start + datetime.timedelta(days=6)
-    return f"{start.strftime('%b %-d')} – {end.strftime('%b %-d')}"
+    end = (datetime.date.fromisoformat(week_start) + datetime.timedelta(days=6)).isoformat()
+    return format_date_range(week_start, end)
 
 
 def parse_date_arg(text: str) -> datetime.date:

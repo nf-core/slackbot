@@ -334,13 +334,13 @@ class TestOncallUnavailable:
 
         mock_find.return_value = "U333"
 
-        await put_roster_entry("2026-04-06", "U111")
+        await put_roster_entry("2026-06-01", "U111")
 
-        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-04-01"):
-            await handle_oncall_unavailable(respond, client, "U111", ["2026-04-05", "2026-04-12"])
+        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-05-25"):
+            await handle_oncall_unavailable(respond, client, "U111", ["2026-05-31", "2026-06-07"])
 
         # The overlapping week should be reassigned
-        entry = await get_roster_entry("2026-04-06")
+        entry = await get_roster_entry("2026-06-01")
         assert entry is not None
         assert entry["assigned_user_id"] == "U333"
         assert entry["status"] == "skipped"
@@ -352,13 +352,121 @@ class TestOncallUnavailable:
 
         mock_find.return_value = None
 
-        await put_roster_entry("2026-04-06", "U111")
+        await put_roster_entry("2026-06-01", "U111")
 
-        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-04-01"):
-            await handle_oncall_unavailable(respond, client, "U111", ["2026-04-05", "2026-04-12"])
+        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-05-25"):
+            await handle_oncall_unavailable(respond, client, "U111", ["2026-05-31", "2026-06-07"])
 
         text = respond.call_args[1]["text"]
         assert "no replacement" in text.lower()
+
+
+class TestOncallUnavailableList:
+    async def test_no_entries(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+
+        await handle_oncall_unavailable(respond, client, "U111", ["list"])
+
+        text = respond.call_args[1]["text"]
+        assert "no upcoming unavailable" in text.lower()
+
+    async def test_lists_upcoming_only(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+        from nf_core_bot.db.oncall import add_unavailability
+
+        # Past, current, and future ranges
+        await add_unavailability("U111", "2020-01-01", "2020-01-15")
+        await add_unavailability("U111", "2026-05-01", "2026-05-15")
+        await add_unavailability("U111", "2026-06-01", "2026-06-10")
+        # Different user — must not appear
+        await add_unavailability("U222", "2026-05-20", "2026-05-25")
+
+        with patch("nf_core_bot.commands.oncall.unavailable.today_iso", return_value="2026-05-02"):
+            await handle_oncall_unavailable(respond, client, "U111", ["list"])
+
+        text = respond.call_args[1]["text"]
+        assert "May 1" in text
+        assert "Jun 1" in text
+        # Past entry must be filtered out
+        assert "2020" not in text
+        # Other user's range must not appear
+        assert "May 20" not in text
+        # Hint about removal
+        assert "remove" in text.lower()
+
+    async def test_list_sorted_by_start(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+        from nf_core_bot.db.oncall import add_unavailability
+
+        await add_unavailability("U111", "2026-08-01", "2026-08-05")
+        await add_unavailability("U111", "2026-06-01", "2026-06-05")
+        await add_unavailability("U111", "2026-07-01", "2026-07-05")
+
+        with patch("nf_core_bot.commands.oncall.unavailable.today_iso", return_value="2026-05-02"):
+            await handle_oncall_unavailable(respond, client, "U111", ["list"])
+
+        text = respond.call_args[1]["text"]
+        assert text.index("Jun 1") < text.index("Jul 1") < text.index("Aug 1")
+
+
+class TestOncallUnavailableRemove:
+    async def test_missing_args(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove"])
+        assert "Usage" in respond.call_args[1]["text"]
+
+    async def test_missing_end_arg(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove", "2026-05-01"])
+        assert "Usage" in respond.call_args[1]["text"]
+
+    async def test_invalid_dates(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove", "bad", "dates"])
+        assert "not a valid date" in respond.call_args[1]["text"].lower()
+
+    async def test_no_matching_range(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+        from nf_core_bot.db.oncall import add_unavailability
+
+        await add_unavailability("U111", "2026-05-01", "2026-05-15")
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove", "2026-06-01", "2026-06-10"])
+
+        text = respond.call_args[1]["text"]
+        assert "no unavailability range found" in text.lower()
+
+    async def test_removes_matching_range(self, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+        from nf_core_bot.db.oncall import add_unavailability, list_unavailability
+
+        await add_unavailability("U111", "2026-05-01", "2026-05-15")
+        await add_unavailability("U111", "2026-06-01", "2026-06-10")
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove", "2026-05-01", "2026-05-15"])
+
+        entries = await list_unavailability("U111")
+        assert len(entries) == 1
+        assert entries[0]["start_date"] == "2026-06-01"
+
+        text = respond.call_args[1]["text"]
+        assert "removed" in text.lower()
+
+    async def test_only_removes_callers_range(self, ddb_table, respond, client) -> None:
+        """Removing must not touch another user's identical range."""
+        from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
+        from nf_core_bot.db.oncall import add_unavailability, list_unavailability
+
+        await add_unavailability("U111", "2026-05-01", "2026-05-15")
+        await add_unavailability("U222", "2026-05-01", "2026-05-15")
+
+        await handle_oncall_unavailable(respond, client, "U111", ["remove", "2026-05-01", "2026-05-15"])
+
+        assert await list_unavailability("U111") == []
+        assert len(await list_unavailability("U222")) == 1
 
 
 # ---------------------------------------------------------------------------

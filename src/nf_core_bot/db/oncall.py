@@ -227,7 +227,7 @@ async def add_unavailability(user_id: str, start_date: str, end_date: str) -> No
 
 
 async def remove_unavailability(user_id: str, start_date: str, end_date: str) -> None:
-    """Remove a specific unavailability entry."""
+    """Remove a specific unavailability entry. Raises ValueError if it doesn't exist."""
     table = get_table()
 
     def _delete() -> None:
@@ -235,10 +235,14 @@ async def remove_unavailability(user_id: str, start_date: str, end_date: str) ->
             Key={
                 "PK": _unavail_pk(user_id),
                 "SK": _unavail_sk(start_date, end_date),
-            }
+            },
+            ConditionExpression=Attr("PK").exists(),
         )
 
-    await asyncio.to_thread(_delete)
+    try:
+        await asyncio.to_thread(_delete)
+    except table.meta.client.exceptions.ConditionalCheckFailedException as exc:
+        raise ValueError(f"No unavailability entry for {user_id} {start_date}–{end_date}") from exc
 
 
 async def list_unavailability(user_id: str) -> list[dict[str, Any]]:

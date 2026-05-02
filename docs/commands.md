@@ -350,13 +350,138 @@ threads).
 
 ---
 
+## On-call Commands
+
+These commands manage the weekly on-call rotation for the `@core-team`. All
+require `@core-team` Slack user group membership.
+
+### `on-call help`
+
+```
+/nf-core on-call help
+```
+
+Show on-call command help.
+
+### `on-call list`
+
+```
+/nf-core on-call list
+```
+
+Show the upcoming on-call schedule, with the assigned user and status (e.g.
+`scheduled`, `swapped`, `skipped`) for each week.
+
+### `on-call me`
+
+```
+/nf-core on-call me
+```
+
+Show the calling user's upcoming on-call weeks.
+
+### `on-call switch`
+
+```
+/nf-core on-call switch [YYYY-MM-DD]
+```
+
+Swap the caller's next on-call week with another week:
+
+- With no argument, swaps with the week immediately after the caller's next
+  assignment.
+- With a date, swaps with the week containing that date.
+
+Both parties receive a DM confirming the swap.
+
+### `on-call skip`
+
+```
+/nf-core on-call skip
+```
+
+Skip the caller's next on-call week. The bot picks a replacement (queue-front
+priority first, then round-robin) and DMs both parties. The caller is moved to
+the front of the queue so they're prioritised for the next available week.
+
+If no replacement is available, the bot suggests using `on-call switch`
+instead.
+
+### `on-call unavailable`
+
+```
+/nf-core on-call unavailable YYYY-MM-DD YYYY-MM-DD
+```
+
+Mark the caller as unavailable for a date range (inclusive). If any of the
+caller's existing on-call weeks overlap the range, the bot tries to find a
+replacement automatically and DMs them.
+
+**Example:**
+
+```
+/nf-core on-call unavailable 2026-07-01 2026-07-14
+```
+
+### `on-call unavailable list`
+
+```
+/nf-core on-call unavailable list
+```
+
+List the caller's stored unavailability ranges (current and future only —
+expired ranges are filtered out). Each entry shows the formatted range and the
+raw ISO dates in backticks for easy copy/paste into the `remove` command.
+
+### `on-call unavailable remove`
+
+```
+/nf-core on-call unavailable remove YYYY-MM-DD YYYY-MM-DD
+```
+
+Remove a previously stored unavailability range. Both dates must exactly match
+an existing range (use `on-call unavailable list` to see the stored values). If
+no matching range is found the bot reports it without making changes.
+
+**Example:**
+
+```
+/nf-core on-call unavailable remove 2026-07-01 2026-07-14
+```
+
+### `on-call reboot`
+
+```
+/nf-core on-call reboot
+```
+
+Wipe the entire on-call schedule (roster + round-robin state) and rebuild it
+from scratch by extending the roster forward. Use with care.
+
+### `on-call calendar`
+
+```
+/nf-core on-call calendar all
+/nf-core on-call calendar me
+```
+
+Get a subscribable iCal URL for the on-call schedule:
+
+- `all` — every week in the rotation
+- `me` — only the caller's weeks
+
+The URL is obfuscated with a per-team token; the calendar updates automatically
+when the schedule changes.
+
+---
+
 ## Permission Model
 
 | Level              | Who                                          | Access                                                                   |
 | ------------------ | -------------------------------------------- | ------------------------------------------------------------------------ |
 | **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites` |
 | **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                      |
-| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`         |
+| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *` |
 
 Admin membership is checked via `usergroups.users.list` and cached for 5
 minutes.
