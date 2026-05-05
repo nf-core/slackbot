@@ -68,7 +68,6 @@ def _make_base_calendar(name: str) -> Calendar:
     cal.add("prodid", "-//nf-core//on-call-bot//EN")
     cal.add("version", "2.0")
     cal.add("calscale", "GREGORIAN")
-    cal.add("method", "PUBLISH")
     cal.add("x-wr-calname", name)
     cal.add("x-wr-timezone", "UTC")
     return cal
@@ -113,7 +112,7 @@ async def generate_personal_calendar(
     if roster is None:
         roster = await list_roster()
     name = await _resolve_display_name(client, user_id)
-    cal = _make_base_calendar(f"nf-core on-call — {name}")
+    cal = _make_base_calendar(f"nf-core on-call - {name}")
 
     for entry in roster:
         if entry.get("assigned_user_id") == user_id:
