@@ -117,8 +117,17 @@ def normalise_github_username(raw: str) -> str | None:
     - ``github.com/octocat``
     - ``@octocat``
     - ``octocat``
+    - Slack auto-linked URLs: ``<https://github.com/octocat>`` and
+      ``<https://github.com/octocat|github.com/octocat>``
     """
     raw = raw.strip()
+
+    # Slack wraps auto-linked URLs in angle brackets (``<url>`` or
+    # ``<url|display>``). Workflow form submissions go through this path, so
+    # strip the wrapper before URL extraction.
+    slack_link = re.match(r"<([^|>]+)(?:\|[^>]*)?>$", raw)
+    if slack_link:
+        raw = slack_link.group(1)
 
     # URL form — extract the first path segment before any other cleanup.
     url_match = re.match(r"(?:https?://)?github\.com/([A-Za-z0-9_.-]+)", raw)
