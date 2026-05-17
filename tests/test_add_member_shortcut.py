@@ -217,6 +217,15 @@ class TestExtractGithubHandle:
         text = "Which is your GitHub handle?\nhttps://github.com/octocat"
         assert _extract_github_handle_from_text(text) == "octocat"
 
+    def test_slack_auto_linked_url_extracted(self) -> None:
+        # Slack auto-links URLs in workflow form output as <url|display>
+        text = "*Which is your GitHub handle?*\n<https://github.com/octocat|github.com/octocat>"
+        assert _extract_github_handle_from_text(text) == "octocat"
+
+    def test_slack_auto_linked_url_without_display_extracted(self) -> None:
+        text = "*Which is your GitHub handle?*\n<https://github.com/octocat>"
+        assert _extract_github_handle_from_text(text) == "octocat"
+
     def test_no_match_returns_none(self) -> None:
         text = "Just a normal message with no GitHub handle question"
         assert _extract_github_handle_from_text(text) is None

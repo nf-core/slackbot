@@ -404,8 +404,7 @@ Skip the caller's next on-call week. The bot picks a replacement (queue-front
 priority first, then round-robin) and DMs both parties. The caller is moved to
 the front of the queue so they're prioritised for the next available week.
 
-If no replacement is available, the bot suggests using `on-call switch`
-instead.
+If no replacement is available, the bot suggests using `on-call switch` instead.
 
 ### `on-call unavailable`
 
@@ -477,10 +476,10 @@ when the schedule changes.
 
 ## Permission Model
 
-| Level              | Who                                          | Access                                                                   |
-| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------ |
-| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites` |
-| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                      |
+| Level              | Who                                          | Access                                                                                 |
+| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites`               |
+| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                                    |
 | **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *` |
 
 Admin membership is checked via `usergroups.users.list` and cached for 5

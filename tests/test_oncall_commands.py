@@ -318,12 +318,12 @@ class TestOncallUnavailable:
         from nf_core_bot.db.oncall import list_unavailability
 
         with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-04-01"):
-            await handle_oncall_unavailable(respond, client, "U111", ["2026-05-01", "2026-05-15"])
+            await handle_oncall_unavailable(respond, client, "U111", ["2030-05-01", "2030-05-15"])
 
         entries = await list_unavailability("U111")
         assert len(entries) == 1
-        assert entries[0]["start_date"] == "2026-05-01"
-        assert entries[0]["end_date"] == "2026-05-15"
+        assert entries[0]["start_date"] == "2030-05-01"
+        assert entries[0]["end_date"] == "2030-05-15"
 
         assert "unavailable" in respond.call_args[1]["text"].lower()
 
