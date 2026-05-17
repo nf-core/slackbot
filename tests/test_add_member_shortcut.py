@@ -70,11 +70,18 @@ class TestGithubUsernameResolution:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_success_invites_and_adds(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="pending")
         mock_team.return_value = GitHubResult(ok=True, message="active")
 
@@ -104,11 +111,18 @@ class TestGithubUsernameResolution:
 class TestThreadReply:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_replies_in_thread_when_in_thread(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -126,11 +140,18 @@ class TestThreadReply:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_replies_to_message_when_not_in_thread(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -232,11 +253,13 @@ class TestExtractRequester:
 
 class TestWorkflowMessage:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_workflow_message_extracts_handle(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -278,8 +301,12 @@ class TestWorkflowMessage:
 class TestGitHubApiErrors:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
-    async def test_org_invite_network_error(self, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_org_invite_network_error(
+        self, mock_org: AsyncMock, mock_check: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.side_effect = RuntimeError("connection refused")
 
         ack = AsyncMock()
@@ -295,8 +322,12 @@ class TestGitHubApiErrors:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
-    async def test_org_invite_api_failure(self, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_org_invite_api_failure(
+        self, mock_org: AsyncMock, mock_check: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=False, message="422 — Validation failed")
 
         ack = AsyncMock()
@@ -311,11 +342,18 @@ class TestGitHubApiErrors:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_team_add_network_error(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.side_effect = RuntimeError("timeout")
 
@@ -336,12 +374,19 @@ class TestGitHubApiErrors:
 class TestDmFailsafe:
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_dm_sent_on_success(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
         """Caller always receives a DM confirmation on success."""
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -356,12 +401,19 @@ class TestDmFailsafe:
 
     @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member_shortcut.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_channel_reply_failure_falls_back_to_dm(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
         """When channel reply fails, caller still gets the DM."""
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 

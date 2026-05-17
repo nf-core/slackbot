@@ -39,9 +39,13 @@ class TestPermissionGate:
 
 class TestBareUsername:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
-    async def test_valid_username_invites(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_valid_username_invites(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="pending")
         mock_team.return_value = GitHubResult(ok=True, message="active")
 
@@ -86,9 +90,11 @@ class TestBareUsername:
         client = make_slack_client()
 
         with (
+            patch("nf_core_bot.commands.github.invite_flow.check_org_membership") as mock_check,
             patch("nf_core_bot.commands.github.invite_flow.invite_to_org") as mock_org,
             patch("nf_core_bot.commands.github.invite_flow.add_to_team") as mock_team,
         ):
+            mock_check.return_value = GitHubResult(ok=False, message="not a member")
             mock_org.return_value = GitHubResult(ok=True, message="ok")
             mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -103,11 +109,18 @@ class TestBareUsername:
 class TestSlackMention:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
     @patch("nf_core_bot.commands.github.add_member.get_github_username", return_value="octocat")
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_mention_resolves_github_username(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_ghuser: AsyncMock, _perm: AsyncMock
+        self,
+        mock_team: AsyncMock,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        mock_ghuser: AsyncMock,
+        _perm: AsyncMock,
     ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -165,8 +178,10 @@ class TestNoArgs:
 
 class TestGitHubApiErrors:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
-    async def test_org_invite_network_error(self, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_org_invite_network_error(self, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.side_effect = RuntimeError("connection refused")
 
         ack = AsyncMock()
@@ -179,8 +194,10 @@ class TestGitHubApiErrors:
         assert any("Failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
-    async def test_org_invite_api_failure(self, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_org_invite_api_failure(self, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=False, message="422 — Validation failed")
 
         ack = AsyncMock()
@@ -193,9 +210,13 @@ class TestGitHubApiErrors:
         assert any("Failed to invite" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
-    async def test_team_add_network_error(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_team_add_network_error(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.side_effect = RuntimeError("timeout")
 
@@ -209,9 +230,13 @@ class TestGitHubApiErrors:
         assert any("failed to reach the GitHub API" in t for t in chan_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
-    async def test_team_add_api_failure(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_team_add_api_failure(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=False, message="403 — Forbidden")
 
@@ -225,15 +250,74 @@ class TestGitHubApiErrors:
         assert any("failed to add to the" in t for t in chan_texts)
 
 
+# ── Already-a-member short-circuit ───────────────────────────────────
+
+
+class TestAlreadyMember:
+    """Skip the invite when the user is already in the org.
+
+    Calling `invite_to_org` with role=member on an existing admin/owner
+    would silently downgrade them, so the flow must bail out beforehand.
+    """
+
+    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
+    async def test_existing_member_not_invited(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.return_value = GitHubResult(ok=True, message="already a member")
+
+        ack = AsyncMock()
+        respond = AsyncMock()
+        client = make_slack_client()
+
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
+
+        mock_check.assert_awaited_once_with("octocat")
+        mock_org.assert_not_awaited()
+        mock_team.assert_not_awaited()
+
+        chan_texts = channel_messages(client)
+        dm_texts = dm_messages(client)
+        all_texts = chan_texts + dm_texts
+        assert any("already a member" in t for t in all_texts)
+
+    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    async def test_membership_check_network_error(
+        self, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
+        mock_check.side_effect = RuntimeError("connection refused")
+
+        ack = AsyncMock()
+        respond = AsyncMock()
+        client = make_slack_client()
+
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["octocat"])
+
+        mock_org.assert_not_awaited()
+        chan_texts = channel_messages(client)
+        dm_texts = dm_messages(client)
+        all_texts = chan_texts + dm_texts
+        assert any("Failed to reach the GitHub API" in t for t in all_texts)
+
+
 # ── DM failsafe ──────────────────────────────────────────────────────
 
 
 class TestDmFailsafe:
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
-    async def test_dm_sent_on_success(self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock) -> None:
+    async def test_dm_sent_on_success(
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
+    ) -> None:
         """Caller always receives a DM confirmation on success."""
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 
@@ -248,12 +332,14 @@ class TestDmFailsafe:
         assert any("octocat" in t and "invited" in t for t in dm_texts)
 
     @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
     @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
     @patch("nf_core_bot.commands.github.invite_flow.add_to_team")
     async def test_dm_fallback_when_channel_reply_fails(
-        self, mock_team: AsyncMock, mock_org: AsyncMock, _perm: AsyncMock
+        self, mock_team: AsyncMock, mock_org: AsyncMock, mock_check: AsyncMock, _perm: AsyncMock
     ) -> None:
         """When channel reply fails, caller gets the message via DM instead."""
+        mock_check.return_value = GitHubResult(ok=False, message="not a member")
         mock_org.return_value = GitHubResult(ok=True, message="ok")
         mock_team.return_value = GitHubResult(ok=True, message="ok")
 

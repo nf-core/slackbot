@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from nf_core_bot.checks.github import add_to_team, invite_to_org
+from nf_core_bot.checks.github import add_to_team, check_org_membership, invite_to_org
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -62,12 +62,34 @@ async def invite_and_greet(
 
     Returns ``True`` on success.
     """
+    # ── 0. Skip if already an org member ─────────────────────────────
+    # Calling invite_to_org on an existing member with role=member would
+    # downgrade admins/owners, so bail out early.
+    try:
+        membership = await check_org_membership(github_username)
+    except Exception as e:
+        logger.exception("Network error checking org membership for %s", github_username)
+        msg = (
+            f"Failed to reach the GitHub API while checking membership for `{github_username}` "
+            f"(`{type(e).__name__}: {e}`). Please try again later."
+        )
+        await _reply_or_dm(reply, client, caller_user_id, msg)
+        return False
+
+    if membership.ok:
+        msg = f"`{github_username}` is already a member of the nf-core GitHub org — nothing to do."
+        await _reply_or_dm(reply, client, caller_user_id, msg)
+        return False
+
     # ── 1. Org invite ────────────────────────────────────────────────
     try:
         org_result = await invite_to_org(github_username)
-    except Exception:
+    except Exception as e:
         logger.exception("Network error inviting %s to org", github_username)
-        msg = f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later."
+        msg = (
+            f"Failed to reach the GitHub API while inviting `{github_username}` "
+            f"(`{type(e).__name__}: {e}`). Please try again later."
+        )
         await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
@@ -79,11 +101,11 @@ async def invite_and_greet(
     # ── 2. Team add ──────────────────────────────────────────────────
     try:
         team_result = await add_to_team(github_username)
-    except Exception:
+    except Exception as e:
         logger.exception("Network error adding %s to team", github_username)
         msg = (
             f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
-            "when adding to the contributors team. Please try again later."
+            f"when adding to the contributors team (`{type(e).__name__}: {e}`). Please try again later."
         )
         await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
