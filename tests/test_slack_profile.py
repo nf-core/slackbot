@@ -85,6 +85,23 @@ class TestNormaliseGithubUsername:
         """github.com/octocat. (from sentence punctuation) extracts correctly."""
         assert normalise_github_username("https://github.com/octocat.") == "octocat"
 
+    # --- Slack-auto-linked URLs ---
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "<https://github.com/octocat>",
+            "<http://github.com/octocat>",
+            "<https://github.com/octocat|github.com/octocat>",
+            "<https://github.com/octocat|https://github.com/octocat>",
+            "<https://github.com/octocat/>",
+            "<https://github.com/octocat/my-repo>",
+        ],
+    )
+    def test_slack_auto_linked_url(self, raw: str) -> None:
+        """Slack wraps URLs in angle brackets in workflow form submissions."""
+        assert normalise_github_username(raw) == "octocat"
+
     # --- Real-world inputs from past requests ---
 
     @pytest.mark.parametrize(
