@@ -67,10 +67,11 @@ async def invite_and_greet(
     # downgrade admins/owners, so bail out early.
     try:
         membership = await check_org_membership(github_username)
-    except Exception:
+    except Exception as e:
         logger.exception("Network error checking org membership for %s", github_username)
         msg = (
-            f"Failed to reach the GitHub API while checking membership for `{github_username}`. Please try again later."
+            f"Failed to reach the GitHub API while checking membership for `{github_username}` "
+            f"(`{type(e).__name__}: {e}`). Please try again later."
         )
         await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
@@ -83,9 +84,12 @@ async def invite_and_greet(
     # ── 1. Org invite ────────────────────────────────────────────────
     try:
         org_result = await invite_to_org(github_username)
-    except Exception:
+    except Exception as e:
         logger.exception("Network error inviting %s to org", github_username)
-        msg = f"Failed to reach the GitHub API while inviting `{github_username}`. Please try again later."
+        msg = (
+            f"Failed to reach the GitHub API while inviting `{github_username}` "
+            f"(`{type(e).__name__}: {e}`). Please try again later."
+        )
         await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
 
@@ -97,11 +101,11 @@ async def invite_and_greet(
     # ── 2. Team add ──────────────────────────────────────────────────
     try:
         team_result = await add_to_team(github_username)
-    except Exception:
+    except Exception as e:
         logger.exception("Network error adding %s to team", github_username)
         msg = (
             f"Invited `{github_username}` to the org, but failed to reach the GitHub API "
-            "when adding to the contributors team. Please try again later."
+            f"when adding to the contributors team (`{type(e).__name__}: {e}`). Please try again later."
         )
         await _reply_or_dm(reply, client, caller_user_id, msg)
         return False
