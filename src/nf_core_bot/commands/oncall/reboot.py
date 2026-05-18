@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from nf_core_bot.calendar.generator import safe_regenerate_calendars
 from nf_core_bot.db.oncall import delete_roster_entry, list_roster, save_round_robin_state
-from nf_core_bot.scheduler.oncall_jobs import _maybe_extend_roster
+from nf_core_bot.scheduler.oncall_jobs import _maybe_extend_roster, sync_oncall_topic
 
 if TYPE_CHECKING:
     from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
@@ -52,3 +52,4 @@ async def handle_oncall_reboot(
     )
 
     await safe_regenerate_calendars(client)
+    await sync_oncall_topic(client)

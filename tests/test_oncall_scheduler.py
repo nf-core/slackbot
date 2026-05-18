@@ -609,3 +609,99 @@ class TestResolveChannelId:
 
         result = await _resolve_channel_id(client)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# sync_oncall_topic
+# ---------------------------------------------------------------------------
+
+
+@patch("nf_core_bot.scheduler.oncall_jobs.current_week_start", return_value="2026-04-06")
+@patch("nf_core_bot.scheduler.oncall_jobs._resolve_channel_id", new_callable=AsyncMock, return_value="C_CORE")
+class TestSyncOncallTopic:
+    async def test_sets_topic_when_different(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.db.oncall import put_roster_entry
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await put_roster_entry("2026-04-06", "U111")
+        client.conversations_info.return_value = {"channel": {"topic": {"value": "old topic"}}}
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_awaited_once_with(channel="C_CORE", topic="On call: <@U111>")
+
+    async def test_skips_when_topic_matches(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.db.oncall import put_roster_entry
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await put_roster_entry("2026-04-06", "U111")
+        client.conversations_info.return_value = {"channel": {"topic": {"value": "On call: <@U111>"}}}
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_not_awaited()
+
+    async def test_clears_topic_when_no_assignee(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.db.oncall import put_roster_entry
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await put_roster_entry("2026-04-06", "")
+        client.conversations_info.return_value = {"channel": {"topic": {"value": "On call: <@U_OLD>"}}}
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_awaited_once_with(channel="C_CORE", topic="")
+
+    async def test_clears_topic_when_no_roster_entry(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        client.conversations_info.return_value = {"channel": {"topic": {"value": "On call: <@U_OLD>"}}}
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_awaited_once_with(channel="C_CORE", topic="")
+
+    async def test_skips_when_topic_already_empty_and_unassigned(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        # No roster entry + topic already empty → no-op (don't spam channel)
+        client.conversations_info.return_value = {"channel": {"topic": {"value": ""}}}
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_not_awaited()
+
+    async def test_skips_set_when_info_fails(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.db.oncall import put_roster_entry
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await put_roster_entry("2026-04-06", "U111")
+        client.conversations_info.side_effect = Exception("missing scope")
+
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_not_awaited()
+
+    async def test_swallows_set_topic_failure(self, _mock_ch, _mock_week, ddb_table, client) -> None:
+        from nf_core_bot.db.oncall import put_roster_entry
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await put_roster_entry("2026-04-06", "U111")
+        client.conversations_info.return_value = {"channel": {"topic": {"value": ""}}}
+        client.conversations_setTopic.side_effect = Exception("missing_scope")
+
+        # Should not raise
+        await sync_oncall_topic(client)
+
+        client.conversations_setTopic.assert_awaited_once()
+
+
+class TestSyncOncallTopicNoChannel:
+    @patch("nf_core_bot.scheduler.oncall_jobs._resolve_channel_id", new_callable=AsyncMock, return_value=None)
+    async def test_no_op_when_channel_not_resolved(self, _mock_ch, ddb_table, client) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
+
+        await sync_oncall_topic(client)
+
+        client.conversations_info.assert_not_awaited()
+        client.conversations_setTopic.assert_not_awaited()

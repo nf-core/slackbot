@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
 from nf_core_bot.calendar.generator import safe_regenerate_calendars
-from nf_core_bot.commands.oncall.helpers import format_week_range, monday_of_week
+from nf_core_bot.commands.oncall.helpers import current_week_start, format_week_range, monday_of_week
 from nf_core_bot.db.oncall import (
     delete_roster_entry,
     get_all_unavailable_users,
     get_reminder_tracking,
+    get_roster_entry,
     get_round_robin_state,
     list_roster,
     put_roster_entry,
@@ -61,6 +62,7 @@ async def run_oncall_scheduler(client: AsyncWebClient) -> None:
     look up user profiles.
     """
     logger.info("on-call scheduler started")
+    await sync_oncall_topic(client)
     while True:
         try:
             await _tick(client)
@@ -433,6 +435,53 @@ async def _send_channel_announcement(
         )
     except Exception:
         logger.exception("Failed to post on-call announcement to #core")
+
+    await sync_oncall_topic(client)
+
+
+# ---------------------------------------------------------------------------
+# Channel topic sync
+# ---------------------------------------------------------------------------
+
+
+async def sync_oncall_topic(client: AsyncWebClient) -> None:
+    """Update the #core channel topic to match this week's on-call assignee.
+
+    No-op if the topic already matches — Slack posts a system message
+    in the channel every time the topic is set, so we dedupe to avoid
+    spamming #core on every scheduler restart or roster recheck.
+
+    Best-effort: all exceptions are swallowed so callers (switch, reboot,
+    weekly announcement) never fail because of a topic-update issue.
+    """
+    try:
+        channel = await _resolve_channel_id(client)
+        if channel is None:
+            logger.warning("Cannot sync on-call topic — #core channel not resolved")
+            return
+
+        current_entry = await get_roster_entry(current_week_start())
+        if current_entry and current_entry.get("assigned_user_id"):
+            desired_topic = f"On call: <@{current_entry['assigned_user_id']}>"
+        else:
+            desired_topic = ""
+
+        try:
+            info = await client.conversations_info(channel=channel)
+            channel_data: dict[str, Any] = info.get("channel") or {}
+            topic_data: dict[str, Any] = channel_data.get("topic") or {}
+            current_topic = topic_data.get("value") or ""
+        except Exception:
+            logger.exception("Failed to read current #core channel topic; skipping topic sync")
+            return
+
+        if current_topic == desired_topic:
+            return
+
+        await client.conversations_setTopic(channel=channel, topic=desired_topic)
+        logger.info("Updated #core channel topic to %r", desired_topic)
+    except Exception:
+        logger.exception("Failed to sync #core channel topic")
 
 
 async def _warn_unassigned(client: AsyncWebClient, week_start: str) -> None:
