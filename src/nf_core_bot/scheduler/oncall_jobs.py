@@ -469,7 +469,7 @@ async def sync_oncall_topic(client: AsyncWebClient) -> None:
         if current_entry and current_entry.get("assigned_user_id"):
             desired_topic = f"On call: <@{current_entry['assigned_user_id']}>"
         else:
-            desired_topic = "On call: (no one assigned)"
+            desired_topic = ""
 
         try:
             info = await client.conversations_info(channel=channel)
