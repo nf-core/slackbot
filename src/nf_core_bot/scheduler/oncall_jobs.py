@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
 from nf_core_bot.calendar.generator import safe_regenerate_calendars
-from nf_core_bot.commands.oncall.helpers import format_week_range, monday_of_week
+from nf_core_bot.commands.oncall.helpers import current_week_start, format_week_range, monday_of_week
 from nf_core_bot.db.oncall import (
     delete_roster_entry,
     get_all_unavailable_users,
     get_reminder_tracking,
+    get_roster_entry,
     get_round_robin_state,
     list_roster,
     put_roster_entry,
@@ -61,10 +62,7 @@ async def run_oncall_scheduler(client: AsyncWebClient) -> None:
     look up user profiles.
     """
     logger.info("on-call scheduler started")
-    try:
-        await sync_oncall_topic(client)
-    except Exception:
-        logger.exception("startup on-call topic sync failed")
+    await sync_oncall_topic(client)
     while True:
         try:
             await _tick(client)
@@ -462,10 +460,7 @@ async def sync_oncall_topic(client: AsyncWebClient) -> None:
             logger.warning("Cannot sync on-call topic — #core channel not resolved")
             return
 
-        this_monday_str = monday_of_week(datetime.date.today()).isoformat()
-        roster = await list_roster(from_date=this_monday_str)
-        current_entry = next((e for e in roster if e["week_start"] == this_monday_str), None)
-
+        current_entry = await get_roster_entry(current_week_start())
         if current_entry and current_entry.get("assigned_user_id"):
             desired_topic = f"On call: <@{current_entry['assigned_user_id']}>"
         else:
