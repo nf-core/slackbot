@@ -14,6 +14,7 @@ from nf_core_bot.commands.oncall.helpers import (
     parse_date_arg,
 )
 from nf_core_bot.db.oncall import list_roster, update_roster_assignment
+from nf_core_bot.scheduler.oncall_jobs import sync_oncall_topic
 
 if TYPE_CHECKING:
     from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
@@ -121,3 +122,4 @@ async def handle_oncall_switch(
     )
 
     await safe_regenerate_calendars(client)
+    await sync_oncall_topic(client)
