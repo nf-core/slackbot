@@ -27,13 +27,26 @@ public URL.
 1. Go to **Features** > **OAuth & Permissions** (left sidebar)
 2. Scroll to **Scopes** > **Bot Token Scopes** and add:
 
-| Scope                | Purpose                                               |
-| -------------------- | ----------------------------------------------------- |
-| `commands`           | Register and receive slash commands                   |
-| `chat:write`         | Post messages and thread replies                      |
-| `users:read`         | Look up user info                                     |
-| `users.profile:read` | Read GitHub username from Slack profile custom fields |
-| `usergroups:read`    | Check `@core-team` membership for permission gating   |
+| Scope                | Purpose                                                                       |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `commands`           | Register and receive slash commands                                           |
+| `chat:write`         | Post messages and thread replies                                              |
+| `users:read`         | Look up user info                                                             |
+| `users.profile:read` | Read GitHub username from Slack profile custom fields                         |
+| `usergroups:read`    | Check `@core-team` membership for permission gating                           |
+| `im:write`           | Open DMs to send confirmations, reminders, and registration messages          |
+| `files:write`        | Upload CSV exports (site organiser downloads)                                 |
+| `groups:read`        | Resolve the on-call `#core` private channel by name for announcements + topic |
+| `groups:write.topic` | Set the `#core` channel topic to reflect the current on-call assignee         |
+
+After changing scopes you must **reinstall the app to the workspace** for the
+new scopes to take effect (see [Install the App](#install-the-app) below). The
+bot token (`xoxb-…`) does not rotate on reinstall, so no environment-variable
+change is needed.
+
+If `#core` is a public channel in your workspace, swap `groups:read` →
+`channels:read` and `groups:write.topic` → `channels:manage` (or the granular
+`channels:write.topic`).
 
 ## Register the Slash Command
 
