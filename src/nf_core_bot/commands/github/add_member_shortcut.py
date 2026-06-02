@@ -26,12 +26,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Pattern to extract the GitHub handle from workflow messages.
-# Matches lines like:
-#   *Which is your GitHub handle?*\nMuteebaAzhar
-#   Which is your GitHub handle?\nMuteebaAzhar
+# Pattern to capture the *answer* to the GitHub-handle question in workflow
+# messages. We grab the whole rest of the answer line (not just the first
+# token) because people often write a sentence rather than a bare handle, e.g.
+#   *Which is your GitHub handle?*\nMy GitHub username is @octocat.
+# The answer is then mined for a real handle by _handle_from_answer().
 _GITHUB_HANDLE_RE = re.compile(
-    r"(?:\*)?(?:Which is your GitHub handle\??|GitHub handle\??)(?:\*)?[\n\r]+\s*(\S+)",
+    r"(?:\*)?(?:Which is your GitHub handle\??|GitHub handle\??)(?:\*)?[\n\r]+[ \t]*([^\n\r]+)",
     re.IGNORECASE,
 )
 
@@ -40,11 +41,37 @@ _GITHUB_HANDLE_RE = re.compile(
 _WORKFLOW_REQUESTER_RE = re.compile(r"By\s+<@(U[A-Z0-9]+)(?:\|[^>]*)?>", re.IGNORECASE)
 
 
+def _handle_from_answer(answer: str) -> str | None:
+    """Mine a single GitHub handle out of a free-text answer.
+
+    People rarely answer "Which is your GitHub handle?" with a bare username —
+    they write things like "My GitHub username is @octocat." Picking the first
+    whitespace-delimited token in that case invites the wrong account (e.g.
+    ``My`` → github.com/my). So we look for an unambiguous signal instead: an
+    ``@mention`` or a ``github.com/<user>`` URL token, falling back to a lone
+    token when the whole answer is just one word. Each candidate is handed to
+    ``normalise_github_username`` for stripping and validation.
+
+    Multi-word prose with no ``@`` or URL is ambiguous — we refuse to guess and
+    return ``None`` so the caller falls back to the explicit slash command.
+    """
+    tokens = answer.split()
+
+    for token in tokens:
+        if token.startswith("@") or "github.com/" in token.lower():
+            return normalise_github_username(token)
+
+    if len(tokens) == 1:
+        return normalise_github_username(tokens[0])
+
+    return None
+
+
 def _extract_github_handle_from_text(text: str) -> str | None:
     """Try to extract and validate a GitHub handle from workflow message text."""
     match = _GITHUB_HANDLE_RE.search(text)
     if match:
-        return normalise_github_username(match.group(1))
+        return _handle_from_answer(match.group(1))
     return None
 
 

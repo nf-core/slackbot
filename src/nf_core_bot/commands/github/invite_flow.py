@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from nf_core_bot.checks.github import add_to_team, check_org_membership, invite_to_org
+from nf_core_bot.checks.github import add_to_team, check_org_membership, check_user_exists, invite_to_org
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -62,7 +62,29 @@ async def invite_and_greet(
 
     Returns ``True`` on success.
     """
-    # ── 0. Skip if already an org member ─────────────────────────────
+    # ── 0a. Verify the account actually exists ───────────────────────
+    # Guards against typos and prose-derived handles inviting the wrong
+    # person (e.g. a stray word that happens to be a real username).
+    try:
+        exists = await check_user_exists(github_username)
+    except Exception as e:
+        logger.exception("Network error checking GitHub user %s", github_username)
+        msg = (
+            f"Failed to reach the GitHub API while checking whether `{github_username}` exists "
+            f"(`{type(e).__name__}: {e}`). Please try again later."
+        )
+        await _reply_or_dm(reply, client, caller_user_id, msg)
+        return False
+
+    if not exists.ok:
+        msg = (
+            f"No GitHub user `{github_username}` found — double-check the handle and try again "
+            f"with `/nf-core github add <github-username>`."
+        )
+        await _reply_or_dm(reply, client, caller_user_id, msg)
+        return False
+
+    # ── 0b. Skip if already an org member ────────────────────────────
     # Calling invite_to_org on an existing member with role=member would
     # downgrade admins/owners, so bail out early.
     try:
