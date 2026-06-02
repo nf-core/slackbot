@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from moto import mock_aws
 
+from nf_core_bot.checks.github import GitHubResult
+
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Iterator
 
 
 @pytest.fixture(autouse=True)
@@ -40,3 +43,17 @@ async def ddb_table() -> AsyncIterator[Any]:
         db_client.init(table_name="test-table", endpoint_url=None, region="us-east-1")
         yield db_client.get_table()
         db_client._table = None
+
+
+@pytest.fixture(autouse=True)
+def _user_exists() -> Iterator[AsyncMock]:
+    """Default the GitHub user-existence check to "exists" for every test.
+
+    The invite flow calls ``check_user_exists`` before inviting; tests that
+    care about the "user not found" path override this mock's return value.
+    """
+    with patch(
+        "nf_core_bot.commands.github.invite_flow.check_user_exists",
+        return_value=GitHubResult(ok=True, message="exists"),
+    ) as mock:
+        yield mock

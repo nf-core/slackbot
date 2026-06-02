@@ -234,6 +234,25 @@ class TestExtractGithubHandle:
         text = "Which is your GitHub handle?\n"
         assert _extract_github_handle_from_text(text) is None
 
+    def test_prose_answer_with_at_mention(self) -> None:
+        # First token is a stray word ("My") — pick the @-mentioned handle.
+        text = "Which is your GitHub handle?\nMy GitHub username is @Harshita-sriv."
+        assert _extract_github_handle_from_text(text) == "Harshita-sriv"
+
+    def test_prose_answer_with_bare_username_rejected(self) -> None:
+        # No @-mention or URL to disambiguate — refuse to guess rather than
+        # invite the first word.
+        text = "Which is your GitHub handle?\nMy username is octocat"
+        assert _extract_github_handle_from_text(text) is None
+
+    def test_prose_answer_with_url(self) -> None:
+        text = "Which is your GitHub handle?\nIt's https://github.com/octocat thanks!"
+        assert _extract_github_handle_from_text(text) == "octocat"
+
+    def test_at_mention_only(self) -> None:
+        text = "*Which is your GitHub handle?*\n@octocat"
+        assert _extract_github_handle_from_text(text) == "octocat"
+
 
 class TestExtractRequester:
     """Unit tests for _extract_requester_from_text."""
@@ -293,6 +312,32 @@ class TestWorkflowMessage:
         client.chat_postEphemeral.assert_awaited()
         text = client.chat_postEphemeral.call_args.kwargs["text"]
         assert "Couldn't find a GitHub username" in text
+
+    @patch("nf_core_bot.commands.github.add_member_shortcut.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    async def test_workflow_message_nonexistent_user_not_invited(
+        self,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _perm: AsyncMock,
+        _user_exists: AsyncMock,
+    ) -> None:
+        """An extracted handle for a nonexistent account must not be invited."""
+        _user_exists.return_value = GitHubResult(ok=False, message="does not exist")
+
+        ack = AsyncMock()
+        client = make_slack_client()
+
+        sc = _workflow_shortcut("*Which is your GitHub handle?*\n@ghost-account-xyz")
+        await handle_add_member_shortcut(ack, sc, client)
+
+        _user_exists.assert_awaited_once_with("ghost-account-xyz")
+        mock_check.assert_not_awaited()
+        mock_org.assert_not_awaited()
+
+        all_texts = channel_messages(client) + dm_messages(client)
+        assert any("No GitHub user `ghost-account-xyz` found" in t for t in all_texts)
 
 
 # ── GitHub API error handling ────────────────────────────────────────

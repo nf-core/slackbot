@@ -103,6 +103,38 @@ class TestBareUsername:
             mock_org.assert_awaited_once_with("octocat")
 
 
+# ── Nonexistent GitHub account ───────────────────────────────────────
+
+
+class TestUserDoesNotExist:
+    @patch("nf_core_bot.commands.github.add_member.is_core_team", return_value=True)
+    @patch("nf_core_bot.commands.github.invite_flow.check_org_membership")
+    @patch("nf_core_bot.commands.github.invite_flow.invite_to_org")
+    async def test_missing_user_not_invited(
+        self,
+        mock_org: AsyncMock,
+        mock_check: AsyncMock,
+        _perm: AsyncMock,
+        _user_exists: AsyncMock,
+    ) -> None:
+        """A handle that resolves to no GitHub account must not be invited."""
+        _user_exists.return_value = GitHubResult(ok=False, message="does not exist")
+
+        ack = AsyncMock()
+        respond = AsyncMock()
+        client = make_slack_client()
+
+        await handle_add_member(ack, respond, client, "U_ADMIN", _command(), ["my"])
+
+        _user_exists.assert_awaited_once_with("my")
+        # Bail before touching membership or invite.
+        mock_check.assert_not_awaited()
+        mock_org.assert_not_awaited()
+
+        all_texts = channel_messages(client) + dm_messages(client)
+        assert any("No GitHub user `my` found" in t for t in all_texts)
+
+
 # ── Slack mention argument ───────────────────────────────────────────
 
 
