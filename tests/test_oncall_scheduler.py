@@ -218,15 +218,22 @@ class TestMaybeExtendRoster:
 
 
 class TestProcessReminders:
+    @patch("nf_core_bot.scheduler.oncall_jobs.list_open_proposals", new_callable=AsyncMock, return_value=[])
     @patch("nf_core_bot.scheduler.oncall_jobs._resolve_channel_id", new_callable=AsyncMock, return_value="C_CORE")
     @patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock)
-    async def test_monday_announcement(self, mock_roster, _mock_ch, ddb_table, client) -> None:
+    async def test_monday_announcement(self, mock_roster, _mock_ch, mock_proposals, ddb_table, client) -> None:
+        from nf_core_bot.checks.github import Proposal
         from nf_core_bot.db.oncall import get_reminder_tracking
         from nf_core_bot.scheduler.oncall_jobs import TARGET_HOUR_UTC, _process_reminders
 
         mock_roster.return_value = [
             {"week_start": "2026-04-06", "assigned_user_id": "U111", "status": "scheduled"},
         ]
+        mock_proposals.return_value = [
+            Proposal(title="cfmultiomics", url="https://github.com/nf-core/proposals/issues/144", section="pipeline"),
+        ]
+        # chat_postMessage must return a ts so the thread replies can be anchored.
+        client.chat_postMessage.return_value = {"ts": "1700000000.000100"}
 
         # Simulate Monday Apr 6 at 08:00 UTC
         now = datetime.datetime(2026, 4, 6, TARGET_HOUR_UTC, 0, tzinfo=datetime.UTC)
@@ -239,10 +246,19 @@ class TestProcessReminders:
             mock_dt.datetime = datetime.datetime
             await _process_reminders(client, now)
 
-        # Should have posted to #core (resolved to C_CORE)
         channel_calls = [c for c in client.chat_postMessage.call_args_list if c.kwargs.get("channel") == "C_CORE"]
-        assert len(channel_calls) == 1
-        assert "<@U111>" in channel_calls[0].kwargs["text"]
+
+        # The announcement itself is the only top-level (non-threaded) post.
+        announcements = [c for c in channel_calls if not c.kwargs.get("thread_ts")]
+        assert len(announcements) == 1
+        assert "<@U111>" in announcements[0].kwargs["text"]
+
+        # Two thread replies anchored to the announcement ts: responsibilities + proposals.
+        replies = [c for c in channel_calls if c.kwargs.get("thread_ts") == "1700000000.000100"]
+        assert len(replies) == 2
+        assert "Start of week responsibilities" in replies[0].kwargs["text"]
+        assert "Open pipeline proposals" in replies[1].kwargs["text"]
+        assert "issues/144|cfmultiomics" in replies[1].kwargs["text"]
 
         # Tracking should be updated
         tracking = await get_reminder_tracking("2026-04-06")
@@ -485,6 +501,52 @@ class TestCleanupOldEntries:
 
         roster = await list_roster()
         assert len(roster) == 1
+
+
+# ---------------------------------------------------------------------------
+# _format_proposals_digest
+# ---------------------------------------------------------------------------
+
+
+class TestFormatProposalsDigest:
+    def _proposals(self, section: str, n: int) -> list:
+        from nf_core_bot.checks.github import Proposal
+
+        return [
+            Proposal(title=f"{section}-{i}", url=f"https://example.com/{section}/{i}", section=section)
+            for i in range(n)
+        ]
+
+    def test_returns_none_when_empty(self) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _format_proposals_digest
+
+        assert _format_proposals_digest([]) is None
+
+    def test_omits_empty_sections_and_orders(self) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _format_proposals_digest
+
+        # Only accepted + rfc present; pipeline/rejected omitted entirely.
+        proposals = self._proposals("rfc", 1) + self._proposals("accepted", 1)
+        message = _format_proposals_digest(proposals)
+        assert message is not None
+        assert "Open pipeline proposals" not in message
+        assert "please close" not in message
+        # Accepted section renders before the RFC section.
+        assert message.index("ready to set up") < message.index("Open RFC proposals")
+
+    def test_truncates_with_more_bullet(self) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import MAX_PROPOSALS_PER_SECTION, _format_proposals_digest
+
+        message = _format_proposals_digest(self._proposals("pipeline", MAX_PROPOSALS_PER_SECTION + 3))
+        assert message is not None
+        assert message.count("- <") == MAX_PROPOSALS_PER_SECTION
+        assert "- (3 more)" in message
+
+    def test_renders_slack_links(self) -> None:
+        from nf_core_bot.scheduler.oncall_jobs import _format_proposals_digest
+
+        message = _format_proposals_digest(self._proposals("pipeline", 1))
+        assert "- <https://example.com/pipeline/0|pipeline-0>" in message
 
 
 # ---------------------------------------------------------------------------
