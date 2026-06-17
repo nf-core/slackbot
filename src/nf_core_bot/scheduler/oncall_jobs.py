@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
 from nf_core_bot.calendar.generator import safe_regenerate_calendars
+from nf_core_bot.checks.github import PROPOSAL_SECTIONS, Proposal, list_open_proposals
 from nf_core_bot.commands.oncall.helpers import current_week_start, format_week_range, monday_of_week
 from nf_core_bot.db.oncall import (
     delete_roster_entry,
@@ -48,6 +49,33 @@ LOOP_INTERVAL = 60
 # the one-week-ahead reminder.  Daily on-call reminders use the user's
 # own Slack timezone instead.
 TARGET_HOUR_UTC = 8
+
+# Maximum proposals listed per section in the announcement thread before a
+# "(N more)" bullet is shown instead.
+MAX_PROPOSALS_PER_SECTION = 5
+
+# Fixed start-of-week reminder posted as the first thread reply under the
+# weekly on-call announcement.
+ONCALL_RESPONSIBILITIES = (
+    "*Start of week responsibilities to do now:*\n"
+    "- Check status and nudge ALL active proposals: https://github.com/nf-core/proposals\n"
+    "- Check stale requests in #release-review-trading and suggest swaps\n"
+    "\n"
+    "*Ongoing during the week:*\n"
+    "- Monitor #request-core\n"
+    "- Monitor #github-invitations\n"
+    "\n"
+    "Docs: https://nf-co.re/docs/community/governance/core-team#complete-on-call-duties"
+)
+
+# Display heading for each proposal section, keyed by Proposal.section.
+# Each heading names the action the on-call person should take.
+_PROPOSAL_SECTION_HEADINGS = {
+    "accepted": "*✅ Accepted pipelines — ready to set up:*",
+    "rejected": "*🚫 Rejected pipelines — please close:*",
+    "pipeline": "*💬 Open pipeline proposals — please continue facilitating discussion:*",
+    "rfc": "*💬 Open RFC proposals — please continue facilitating discussion:*",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -422,21 +450,87 @@ async def _send_channel_announcement(
     user_id: str,
     week_start: str,
 ) -> None:
-    """Post to #core announcing who is on call this week."""
+    """Post to #core announcing who is on call this week.
+
+    Follows up in-thread with the start-of-week responsibilities reminder
+    and a digest of open proposals.
+    """
     week_range = format_week_range(week_start)
     channel = await _resolve_channel_id(client)
     if channel is None:
         logger.error("Cannot post on-call announcement — #core channel not resolved")
         return
     try:
-        await client.chat_postMessage(
+        resp = await client.chat_postMessage(
             channel=channel,
             text=f":mega: <@{user_id}> is on call this week (*{week_range}*).",
         )
     except Exception:
         logger.exception("Failed to post on-call announcement to #core")
+    else:
+        thread_ts = resp.get("ts") if resp else None
+        if thread_ts:
+            await _post_announcement_thread(client, channel, thread_ts)
 
     await sync_oncall_topic(client)
+
+
+async def _post_announcement_thread(client: AsyncWebClient, channel: str, thread_ts: str) -> None:
+    """Post the responsibilities reminder and proposals digest as thread replies.
+
+    Both replies are best-effort and independent: a failure posting one does
+    not prevent the other.
+    """
+    try:
+        await client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=ONCALL_RESPONSIBILITIES,
+        )
+    except Exception:
+        logger.exception("Failed to post on-call responsibilities thread reply")
+
+    try:
+        proposals = await list_open_proposals()
+        message = _format_proposals_digest(proposals)
+        if message:
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts,
+                text=message,
+            )
+    except Exception:
+        logger.exception("Failed to post on-call proposals thread reply")
+
+
+def _slack_link(url: str, text: str) -> str:
+    """Render a Slack hyperlink, escaping the display text."""
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"<{url}|{escaped}>"
+
+
+def _format_proposals_digest(proposals: list[Proposal]) -> str | None:
+    """Format categorised proposals into the thread-reply message text.
+
+    Each section lists at most ``MAX_PROPOSALS_PER_SECTION`` issues (most
+    recently updated first) with a trailing "(N more)" bullet when truncated.
+    Empty sections are omitted; returns ``None`` if nothing to show.
+    """
+    blocks: list[str] = []
+    for section in PROPOSAL_SECTIONS:
+        items = [p for p in proposals if p.section == section]
+        if not items:
+            continue
+        lines = [_PROPOSAL_SECTION_HEADINGS[section]]
+        lines.extend(f"- {_slack_link(p.url, p.title)}" for p in items[:MAX_PROPOSALS_PER_SECTION])
+        remainder = len(items) - MAX_PROPOSALS_PER_SECTION
+        if remainder > 0:
+            lines.append(f"- ({remainder} more)")
+        blocks.append("\n".join(lines))
+
+    if not blocks:
+        return None
+    return "\n\n".join(blocks)
 
 
 # ---------------------------------------------------------------------------

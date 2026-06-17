@@ -12,6 +12,7 @@ from nf_core_bot.checks.github import (
     check_user_exists,
     close_client,
     invite_to_org,
+    list_open_proposals,
 )
 
 
@@ -157,3 +158,59 @@ class TestGitHubResult:
         r = GitHubResult(ok=True, message="done")
         assert r.ok is True
         assert r.message == "done"
+
+
+# ── list_open_proposals ──────────────────────────────────────────────
+
+
+def _issue(title: str, number: int, *labels: str) -> dict:
+    """Build a minimal GitHub issue payload."""
+    return {
+        "title": title,
+        "html_url": f"https://github.com/nf-core/proposals/issues/{number}",
+        "labels": [{"name": name} for name in labels],
+    }
+
+
+class TestListOpenProposals:
+    async def test_categorises_and_cleans_titles(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = [
+            _issue("New pipeline: nf-core/cfmultiomics", 144, "new-pipeline", "proposed"),
+            _issue("New pipeline: dragen", 137, "new-pipeline"),
+            _issue("New pipeline: nf-core/midas", 142, "new-pipeline", "accepted"),
+            _issue("New pipeline: nf-core/oldproposal", 99, "new-pipeline", "withdrawn"),
+            _issue("New RFC: `AGENTS.md` and AI steering document", 141, "new-rfc"),
+            _issue("New RFC: CODEOWNER for pipelines", 40, "new-rfc", "accepted"),
+            _issue("Migrate CI linting", 150),  # no relevant label → skipped
+            {  # a PR returned by the issues endpoint → skipped
+                "title": "New pipeline: nf-core/notaproposal",
+                "html_url": "https://github.com/nf-core/proposals/pull/1",
+                "labels": [{"name": "new-pipeline"}],
+                "pull_request": {"url": "..."},
+            },
+        ]
+
+        async def mock_get(path: str) -> httpx.Response:
+            assert "/repos/nf-core/proposals/issues" in path
+            return _mock_response(200, json_body=payload)
+
+        monkeypatch.setattr("nf_core_bot.checks.github._github_get", mock_get)
+        proposals = await list_open_proposals()
+
+        sections = {p.section for p in proposals}
+        by_section = {s: [(p.title, p.url) for p in proposals if p.section == s] for s in sections}
+
+        assert by_section["accepted"] == [("midas", "https://github.com/nf-core/proposals/issues/142")]
+        assert by_section["rejected"] == [("oldproposal", "https://github.com/nf-core/proposals/issues/99")]
+        assert [t for t, _ in by_section["pipeline"]] == ["cfmultiomics", "dragen"]
+        # Accepted RFC dropped; backticks and prefix stripped on the live one.
+        assert by_section["rfc"] == [
+            ("AGENTS.md and AI steering document", "https://github.com/nf-core/proposals/issues/141")
+        ]
+
+    async def test_returns_empty_on_api_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_get(path: str) -> httpx.Response:
+            return _mock_response(500, text="boom")
+
+        monkeypatch.setattr("nf_core_bot.checks.github._github_get", mock_get)
+        assert await list_open_proposals() == []

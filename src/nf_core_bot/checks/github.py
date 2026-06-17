@@ -7,6 +7,7 @@ for invitation/team-management operations.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -158,3 +159,102 @@ async def add_to_team(username: str, team_slug: str = "contributors") -> GitHubR
         ok=False,
         message=f"Failed to add `{username}` to team `{team_slug}`: {resp.status_code} — {resp.text}",
     )
+
+
+# ── Proposals digest ─────────────────────────────────────────────────
+# Powers the weekly on-call announcement thread (see scheduler.oncall_jobs).
+
+PROPOSALS_REPO = "proposals"
+
+_PIPELINE_LABEL = "new-pipeline"
+_RFC_LABEL = "new-rfc"
+_ACCEPTED_LABEL = "accepted"
+# Decision labels that mean a proposal is closed-out and the open issue
+# should be tidied away by the on-call person.
+_REJECTED_LABELS = {"withdrawn", "turned-down", "timed-out", "merge-with-existing"}
+
+# Proposal sections, ordered for display. Accepted/rejected pipelines need
+# direct action (set up / close), so they sit above the under-discussion lists.
+PROPOSAL_SECTIONS = ("accepted", "rejected", "pipeline", "rfc")
+
+
+@dataclass
+class Proposal:
+    """A single open proposal issue, categorised for the on-call digest."""
+
+    title: str  # human-friendly, prefixes/backticks stripped
+    url: str
+    section: str  # one of PROPOSAL_SECTIONS
+
+
+def _clean_proposal_title(title: str, kind: str) -> str:
+    """Strip the standard ``New pipeline:``/``New RFC:`` prefixes and noise.
+
+    *kind* is ``"pipeline"`` or ``"rfc"`` and selects which prefix to strip.
+    Also drops a leading ``nf-core/`` org prefix and any backticks so the
+    text reads cleanly inside a Slack link.
+    """
+    title = title.strip()
+    if kind == "pipeline":
+        title = re.sub(r"^new pipeline:\s*", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"^nf-core/", "", title, flags=re.IGNORECASE)
+    else:
+        title = re.sub(r"^new rfc:\s*", "", title, flags=re.IGNORECASE)
+    return title.replace("`", "").strip()
+
+
+async def list_open_proposals() -> list[Proposal]:
+    """Return open proposals from ``{org}/proposals``, categorised for on-call.
+
+    ``GET /repos/{org}/proposals/issues?state=open&sort=updated``
+
+    Pull requests and issues without a relevant label are skipped. Results
+    keep GitHub's most-recently-updated-first ordering. Categorisation is
+    purely by label:
+
+    * ``new-pipeline`` + ``accepted`` → ``accepted`` (needs set up)
+    * ``new-pipeline`` + a rejection label → ``rejected`` (needs closing)
+    * ``new-pipeline`` (otherwise) → ``pipeline``
+    * ``new-rfc`` (not accepted/rejected) → ``rfc``
+
+    Accepted/rejected RFCs and label-less issues carry no on-call action and
+    are dropped. Returns an empty list on any API error (best-effort).
+    """
+    org = config.GITHUB_ORG
+    resp = await _github_get(
+        f"/repos/{org}/{PROPOSALS_REPO}/issues?state=open&sort=updated&direction=desc&per_page=100"
+    )
+    if resp.status_code != 200:
+        logger.error("Failed to list proposals: %s — %s", resp.status_code, resp.text)
+        return []
+
+    proposals: list[Proposal] = []
+    for issue in resp.json():
+        if "pull_request" in issue:  # the issues endpoint also returns PRs
+            continue
+        labels = {lbl.get("name", "") for lbl in issue.get("labels", [])}
+        is_accepted = _ACCEPTED_LABEL in labels
+        is_rejected = bool(labels & _REJECTED_LABELS)
+
+        if _PIPELINE_LABEL in labels:
+            kind = "pipeline"
+            if is_accepted:
+                section = "accepted"
+            elif is_rejected:
+                section = "rejected"
+            else:
+                section = "pipeline"
+        elif _RFC_LABEL in labels and not is_accepted and not is_rejected:
+            kind = "rfc"
+            section = "rfc"
+        else:
+            continue
+
+        proposals.append(
+            Proposal(
+                title=_clean_proposal_title(issue.get("title", ""), kind),
+                url=issue.get("html_url", ""),
+                section=section,
+            )
+        )
+    return proposals
