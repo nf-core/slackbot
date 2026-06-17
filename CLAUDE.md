@@ -160,6 +160,11 @@ automatically.
 
 ## Important Slack Constraints
 
+> When working on anything Slack-facing (handlers, message formatting/Block Kit,
+> slash commands, events, modals, shortcuts, scopes/manifest), use the
+> **`slack-app` skill** (`.claude/skills/slack-app/`). It captures the delivery,
+> formatting, and manifest rules — and the hard-won gotchas — for this codebase.
+
 - Modals have a 100-element limit per view — split forms across multiple steps
 - Slack gives 3 seconds to acknowledge interactions — `ack()` immediately, do
   async work after
