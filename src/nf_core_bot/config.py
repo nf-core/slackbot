@@ -34,7 +34,7 @@ _DEFAULTS: dict[str, str | None] = {
     "PROPOSALS_CHANNEL": "new-pipelines",
     "PROPOSALS_REVIEW_ENABLED": "true",
     # Bedrock model ID — an inference-profile ID in eu-west-1 (note the "eu." prefix).
-    "BEDROCK_MODEL_ID": "eu.anthropic.claude-opus-4-8",
+    "BEDROCK_MODEL_ID": "eu.anthropic.claude-sonnet-4-6",
     # Region for the Bedrock client; falls back to AWS_REGION when unset.
     "BEDROCK_REGION": None,
     "BEDROCK_MAX_TOKENS": "12000",

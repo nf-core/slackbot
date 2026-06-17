@@ -165,7 +165,7 @@ class NfCoreBotStack(Stack):
                 "CALENDAR_CLOUDFRONT_DOMAIN": calendar_distribution.distribution_domain_name,
                 # Pipeline-proposal reviews (Claude via Bedrock)
                 "PROPOSALS_CHANNEL": "new-pipelines",
-                "BEDROCK_MODEL_ID": "eu.anthropic.claude-opus-4-8",
+                "BEDROCK_MODEL_ID": "eu.anthropic.claude-sonnet-4-6",
             },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="bot",
