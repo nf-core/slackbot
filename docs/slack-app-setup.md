@@ -38,6 +38,7 @@ public URL.
 | `files:write`        | Upload CSV exports (site organiser downloads)                                 |
 | `groups:read`        | Resolve the on-call `#core` private channel by name for announcements + topic |
 | `groups:write.topic` | Set the `#core` channel topic to reflect the current on-call assignee         |
+| `channels:history`   | Read #new-pipelines messages to auto-trigger pipeline-proposal reviews        |
 
 After changing scopes you must **reinstall the app to the workspace** for the
 new scopes to take effect (see [Install the App](#install-the-app) below). The
@@ -61,22 +62,32 @@ If `#core` is a public channel in your workspace, swap `groups:read` →
    - **Escape channels, users, and links sent to your app:** check this box
 4. Click **Save**
 
-## Add the Message Shortcut
+## Enable Event Subscriptions
 
-The "Add to GitHub org" message shortcut lets core-team members right-click any
-message and invite its author to the nf-core GitHub org. This works everywhere
-including threads (unlike slash commands).
+The bot listens for messages in #new-pipelines to auto-trigger proposal reviews.
+
+1. Go to **Features** > **Event Subscriptions** (left sidebar)
+2. Toggle **Enable Events** on (Socket Mode handles the request URL)
+3. Under **Subscribe to bot events**, add `message.channels`
+4. Save, then **reinstall the app** for the change to take effect
+5. **Invite the bot to #new-pipelines** (`/invite @nf-core-bot`) — it only
+   receives messages from channels it is a member of
+
+## Add the Message Shortcuts
+
+Message shortcuts let members right-click a message to act on it. These work
+everywhere, including threads (unlike slash commands).
 
 1. Go to **Features** > **Interactivity & Shortcuts** (left sidebar)
 2. Ensure **Interactivity** is toggled on (Socket Mode handles the request URL)
-3. Under **Shortcuts**, click **Create New Shortcut**
-4. Select **On messages** (message shortcut, not global)
-5. Fill in:
-   - **Name:** `Add to GitHub org`
-   - **Short Description:**
-     `Invite this message's author to the nf-core GitHub org`
-   - **Callback ID:** `add_to_github_org`
-6. Click **Create**
+3. Under **Shortcuts**, click **Create New Shortcut** and select **On messages**
+
+Create two shortcuts:
+
+| Name                       | Callback ID                | Purpose                                                             |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| `Add to GitHub org`        | `add_to_github_org`        | Invite this message's author to the nf-core GitHub org              |
+| `Review pipeline proposal` | `review_pipeline_proposal` | Review the proposal linked in this message (posts a threaded reply) |
 
 ## Install the App
 

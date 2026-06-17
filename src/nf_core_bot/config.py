@@ -24,11 +24,25 @@ _DEFAULTS: dict[str, str | None] = {
     "AWS_REGION": "eu-west-1",
     # Permissions
     "CORE_TEAM_USERGROUP_HANDLE": "core-team",
+    "MAINTAINERS_USERGROUP_HANDLE": "maintainers-team",
     # Channels
     "ONCALL_CHANNEL": "core",
     # Calendar (S3 + CloudFront)
     "CALENDAR_S3_BUCKET": None,
     "CALENDAR_CLOUDFRONT_DOMAIN": None,
+    # Pipeline-proposal reviews
+    "PROPOSALS_CHANNEL": "new-pipelines",
+    "PROPOSALS_REVIEW_ENABLED": "true",
+    # Bedrock model ID — an inference-profile ID in eu-west-1 (note the "eu." prefix).
+    "BEDROCK_MODEL_ID": "eu.anthropic.claude-opus-4-8",
+    # Region for the Bedrock client; falls back to AWS_REGION when unset.
+    "BEDROCK_REGION": None,
+    "BEDROCK_MAX_TOKENS": "12000",
+    # Thinking mode passed to the model: "adaptive" (default) or "off".
+    "BEDROCK_THINKING": "adaptive",
+    # Read-only GitHub token for the proposal-review CLI tool; falls back to
+    # GITHUB_TOKEN when unset (the tool allowlist is read-only regardless).
+    "PROPOSALS_GITHUB_TOKEN": None,
 }
 
 _REQUIRED: frozenset[str] = frozenset(["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET", "SLACK_APP_TOKEN", "GITHUB_TOKEN"])

@@ -38,7 +38,8 @@ from nf_core_bot.commands.oncall.reboot import handle_oncall_reboot
 from nf_core_bot.commands.oncall.skip import handle_oncall_skip
 from nf_core_bot.commands.oncall.switch import handle_oncall_switch
 from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
-from nf_core_bot.permissions.checks import is_core_team
+from nf_core_bot.commands.proposals.review import handle_proposals_review
+from nf_core_bot.permissions.checks import is_core_team, is_core_team_or_maintainers
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -100,6 +101,11 @@ async def dispatch(
     # ── On-call commands ─────────────────────────────────────────────
     if sub == "on-call":
         await _route_oncall(ack, respond, client, user_id, rest)
+        return
+
+    # ── Pipeline-proposal review commands ────────────────────────────
+    if sub == "proposals":
+        await _route_proposals(ack, respond, client, user_id, command, rest)
         return
 
     # ── Unknown ──────────────────────────────────────────────────────
@@ -300,3 +306,45 @@ async def _route_oncall(
     else:
         # skip, reboot: (respond, client, user_id)
         await handler(respond, client, user_id)  # type: ignore[operator]
+
+
+# ── Proposal-review dispatch ─────────────────────────────────────────
+
+_PROPOSALS_HELP = "`/nf-core proposals review <issue-number> [preview]` — review a new-pipeline proposal."
+
+
+async def _route_proposals(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    command: dict[str, str],
+    tokens: list[str],
+) -> None:
+    """Dispatch ``/nf-core proposals <sub> [args…]``.
+
+    Restricted to ``@core-team`` and ``@maintainers-team`` members.
+    """
+    await ack()
+
+    if not await is_core_team_or_maintainers(client, user_id):
+        await respond(
+            "Sorry, proposal commands are restricted to `@core-team` and `@maintainers-team` members.",
+            response_type="ephemeral",
+        )
+        return
+
+    if not tokens or tokens[0].lower() == "help":
+        await respond(_PROPOSALS_HELP, response_type="ephemeral")
+        return
+
+    sub = tokens[0].lower()
+    rest = tokens[1:]
+
+    if sub == "review":
+        await handle_proposals_review(respond, client, user_id, command, rest)
+    else:
+        await respond(
+            f"Unknown proposals command: `{sub}`. {_PROPOSALS_HELP}",
+            response_type="ephemeral",
+        )

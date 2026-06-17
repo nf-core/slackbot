@@ -258,3 +258,80 @@ async def list_open_proposals() -> list[Proposal]:
             )
         )
     return proposals
+
+
+# ── Full issue + comments (for automated review) ─────────────────────
+
+NEW_PIPELINE_LABEL = _PIPELINE_LABEL  # "new-pipeline"
+
+
+@dataclass
+class IssueComment:
+    """A single comment on a proposal issue."""
+
+    author: str
+    created_at: str
+    body: str
+
+
+@dataclass
+class IssueWithComments:
+    """A proposal issue plus all of its comments, for review."""
+
+    number: int
+    title: str
+    url: str
+    author: str
+    state: str
+    labels: list[str]
+    body: str
+    comments: list[IssueComment]
+
+
+async def get_issue_with_comments(number: int, repo: str = PROPOSALS_REPO) -> IssueWithComments | None:
+    """Fetch a single issue and all its comments from ``{org}/{repo}``.
+
+    Returns ``None`` if the issue cannot be fetched (or is a pull request).
+    Comments are paginated through in full.
+    """
+    org = config.GITHUB_ORG
+    resp = await _github_get(f"/repos/{org}/{repo}/issues/{number}")
+    if resp.status_code != 200:
+        logger.error("Failed to fetch issue %s/%s#%d: %s", org, repo, number, resp.status_code)
+        return None
+    issue = resp.json()
+    if "pull_request" in issue:
+        return None
+
+    comments: list[IssueComment] = []
+    page = 1
+    while True:
+        c_resp = await _github_get(f"/repos/{org}/{repo}/issues/{number}/comments?per_page=100&page={page}")
+        if c_resp.status_code != 200:
+            logger.warning("Failed to fetch comments for %s#%d (page %d): %s", repo, number, page, c_resp.status_code)
+            break
+        batch = c_resp.json()
+        if not batch:
+            break
+        for c in batch:
+            comments.append(
+                IssueComment(
+                    author=(c.get("user") or {}).get("login", ""),
+                    created_at=c.get("created_at", ""),
+                    body=c.get("body", "") or "",
+                )
+            )
+        if len(batch) < 100:
+            break
+        page += 1
+
+    return IssueWithComments(
+        number=number,
+        title=issue.get("title", ""),
+        url=issue.get("html_url", ""),
+        author=(issue.get("user") or {}).get("login", ""),
+        state=issue.get("state", ""),
+        labels=[lbl.get("name", "") for lbl in issue.get("labels", [])],
+        body=issue.get("body", "") or "",
+        comments=comments,
+    )

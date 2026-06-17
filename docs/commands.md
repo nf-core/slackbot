@@ -21,6 +21,27 @@ are only shown to `@core-team` members.
 
 ---
 
+## Pipeline Proposal Reviews
+
+Restricted to `@core-team` and `@maintainers-team` members.
+
+### `proposals review`
+
+```
+/nf-core proposals review <issue-number> [preview]
+```
+
+Review an `nf-core/proposals` new-pipeline proposal with Claude and post the
+result **in the conversation where you run the command** (channel or DM) — it is
+never cross-posted to #new-pipelines. Run it in a DM, or add `preview`, for a
+private (ephemeral) result.
+
+New proposals are also reviewed **automatically** when their announcement is
+posted in #new-pipelines. See [proposal-reviews.md](proposal-reviews.md) for the
+full design and setup.
+
+---
+
 ## Hackathon Commands
 
 ### `help`
