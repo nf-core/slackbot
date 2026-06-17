@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 from nf_core_bot.proposals import spawn
 from nf_core_bot.proposals.review import build_review_message
-from nf_core_bot.proposals.slack_utils import chunk_message
 
 if TYPE_CHECKING:
     from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
@@ -59,14 +58,14 @@ async def handle_proposals_review(
 
 async def _run_and_post(respond: Respond, number: int, *, preview: bool) -> None:
     # Slash-command reviews never ping @core-team (mention left empty), and are
-    # delivered via the response URL so they land wherever the command was run.
-    issue, text = await build_review_message(number, core_team_mention="")
-    if issue is None or text is None:
+    # delivered via the response URL (Block Kit) so they land as a single message
+    # wherever the command was run — channel, bot DM, or self-DM.
+    issue, blocks, fallback = await build_review_message(number, core_team_mention="")
+    if issue is None or blocks is None:
         await respond(
             f"Couldn't fetch proposal #{number} from `nf-core/proposals` — is the issue number correct?",
             response_type="ephemeral",
         )
         return
     response_type = "ephemeral" if preview else "in_channel"
-    for chunk in chunk_message(text):
-        await respond(chunk, response_type=response_type)
+    await respond(blocks=blocks, text=fallback or "", response_type=response_type)

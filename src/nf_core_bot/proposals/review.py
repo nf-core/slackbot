@@ -1,13 +1,15 @@
-"""Orchestrate a single proposal review: fetch → run skill → render Slack text."""
+"""Orchestrate a single proposal review: fetch → run skill → render Slack blocks."""
 
 from __future__ import annotations
 
 import logging
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from nf_core_bot.checks.github import IssueWithComments, get_issue_with_comments
 from nf_core_bot.proposals.bedrock import run_review_agent
+from nf_core_bot.proposals.slack_utils import build_review_blocks
 
 logger = logging.getLogger(__name__)
 
@@ -55,45 +57,55 @@ def build_proposal_context(issue: IssueWithComments) -> str:
 
     lines.append(
         "Review this proposal now by following the skill. The issue body and all comments "
-        "are above, so start from the tool/pipeline overlap research. Produce the review in "
-        "Slack mrkdwn as described in the skill's runtime addendum."
+        "are above, so start from the tool/pipeline overlap research. Produce the review as "
+        "concise standard Markdown exactly as described in the skill's runtime addendum."
     )
     return "\n".join(lines)
 
 
 async def generate_review_body(issue: IssueWithComments) -> str:
-    """Run the skill against *issue* and return Claude's review text (mrkdwn)."""
+    """Run the skill against *issue* and return Claude's review body (Markdown)."""
     context = build_proposal_context(issue)
     return await run_review_agent(_skill_prompt(), context)
 
 
-def render_message(issue: IssueWithComments, review_body: str, core_team_mention: str = "") -> str:
-    """Wrap *review_body* in the Slack message template.
+def render_blocks(
+    issue: IssueWithComments,
+    review_body: str,
+    core_team_mention: str = "",
+) -> tuple[list[dict[str, Any]], str]:
+    """Build the Slack Block Kit message + a plain-text fallback for *review_body*.
 
-    *core_team_mention* should be a ``<!subteam^ID>`` string for public posts, or
-    empty for private/preview runs (so nobody is pinged).
+    The header (title link + ``core_team_mention``) and footer come from the
+    tweakable ``templates/review.md``; the model's Markdown body goes in a
+    ``markdown`` block so bullets/nesting/code render natively. *core_team_mention*
+    is a ``<!subteam^ID>`` string for public posts, or empty to ping nobody.
     """
-    text = _template()
+    head, _, foot = _template().partition("{review_body}")
     replacements = {
         "{core_team_mention}": core_team_mention,
         "{proposal_url}": issue.url,
         "{issue_number}": str(issue.number),
         "{proposal_title}": issue.title,
-        "{review_body}": review_body,
     }
     for token, value in replacements.items():
-        text = text.replace(token, value)
-    # Collapse the blank line left when there is no mention.
-    return text.replace("\n\n\n", "\n\n").strip()
+        head = head.replace(token, value)
+        foot = foot.replace(token, value)
+    blocks = build_review_blocks(head.strip(), review_body.strip(), foot.strip())
+    fallback = f"New pipeline proposal review: #{issue.number}: {issue.title}"
+    return blocks, fallback
 
 
-async def build_review_message(number: int, core_team_mention: str = "") -> tuple[IssueWithComments | None, str | None]:
-    """Fetch issue *number*, run the review, and return ``(issue, slack_text)``.
+async def build_review_message(
+    number: int, core_team_mention: str = ""
+) -> tuple[IssueWithComments | None, list[dict[str, Any]] | None, str | None]:
+    """Fetch issue *number*, run the review, return ``(issue, blocks, fallback_text)``.
 
-    Returns ``(None, None)`` if the issue can't be fetched.
+    Returns ``(None, None, None)`` if the issue can't be fetched.
     """
     issue = await get_issue_with_comments(number)
     if issue is None:
-        return None, None
+        return None, None, None
     body = await generate_review_body(issue)
-    return issue, render_message(issue, body, core_team_mention)
+    blocks, fallback = render_blocks(issue, body, core_team_mention)
+    return issue, blocks, fallback

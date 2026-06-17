@@ -268,14 +268,44 @@ comment are included in the user message, so you can skip Step 1's
 overlap). Use `fetch_proposal.sh` only if you need to cross-reference another
 proposal.
 
-**Output format — Slack mrkdwn, not GitHub Markdown.** The review is posted as a
-Slack message, which uses a restricted "mrkdwn" syntax:
+**Output format — ONE short message in standard Markdown.** These rules OVERRIDE
+the formatting in Step 5. Your entire response is rendered verbatim in a Slack
+Markdown block (standard Markdown: `**bold**`, `-` bullets with nested
+indentation, `[text](url)` links, code blocks all render natively). So:
 
-- Use `*bold*` (single asterisks), `_italic_`, and `- ` bullets.
-- Do NOT use Markdown headings (`#`, `##`) or Markdown tables — they render as
-  literal text in Slack. Use `*Bold labels:*` on their own line instead of
-  headings.
-- Put the Step 5 verdict block and the draft GitHub comment inside
-  triple-backtick code fences so they are easy to copy.
-- Lead with the verdict, then a short narrative, then the draft comment. The
-  maintainer team is the audience — keep it tight.
+- **No preamble, no meta-commentary.** Never write "Here is the review", "I have
+  enough to…", or similar. Start directly with the verdict line. Do not add `---`
+  separators or a top-level heading (the bot adds the title).
+- **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
+  under ~1500 characters. Short bullets, not paragraphs. Cut anything a
+  maintainer doesn't need to decide.
+- Use `-` for bullets and indent two spaces for a nested sub-bullet. Use
+  `**bold**` for the labels below.
+
+Output the message directly as Markdown — do **NOT** wrap the whole message in a
+code block. The ONLY code block in your output is the draft GitHub comment at the
+end. Emoji key: ✅ pass/accept, ⚠️ partial/borderline, ❌ fail/reject; 🟢/🟡/🔴 =
+low/med/high risk. Follow this structure (these lines are the literal Markdown to
+emit, minus this surrounding explanation):
+
+> **Verdict: ✅ CONDITIONAL_ACCEPT**
+>
+> - **Novelty:** one line, or "none identified"
+> - **Overlap:** most relevant existing pipeline(s), one line
+> - **Specificity:** ✅ PASS — ≤8 words
+> - **Testability:** ⚠️ PARTIAL — ≤8 words
+> - **Sustainability:** 🔴 LOW — ≤8 words
+>
+> **Why**
+>
+> - 2–3 short bullets: what it does, the gap it fills, the main risk.
+>
+> **Blockers / conditions** (only if relevant)
+>
+> - one-line bullets; nest sub-points with two-space indentation if needed.
+
+Then add the **draft GitHub comment** as the final element, wrapped in a single
+triple-backtick code block so a maintainer can copy it. Inside that block write
+_GitHub_-flavoured Markdown, keep it under ~150 words, and **do not hard-wrap**:
+put each paragraph and each bullet on ONE line with a blank line between
+paragraphs — a stray mid-paragraph newline renders as a `<br>` on GitHub.

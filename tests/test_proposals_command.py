@@ -57,24 +57,27 @@ class TestHandler:
         captured[0].close()  # don't leave an un-awaited coroutine
 
 
+_BLOCKS = [{"type": "markdown", "text": "THE REVIEW"}]
+
+
 class TestRunAndPost:
-    async def test_visible_post_uses_response_url(self) -> None:
+    async def test_visible_post_uses_response_url_blocks(self) -> None:
         respond = AsyncMock()
-        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))):
+        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), _BLOCKS, "fb"))):
             await cmd._run_and_post(respond, 148, preview=False)
         respond.assert_awaited_once()
         assert respond.await_args.kwargs.get("response_type") == "in_channel"
-        assert respond.await_args.args[0] == "TEXT"
+        assert respond.await_args.kwargs.get("blocks") == _BLOCKS
 
     async def test_preview_is_ephemeral(self) -> None:
         respond = AsyncMock()
-        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))):
+        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), _BLOCKS, "fb"))):
             await cmd._run_and_post(respond, 148, preview=True)
         assert respond.await_args.kwargs.get("response_type") == "ephemeral"
 
     async def test_missing_issue_warns_ephemerally(self) -> None:
         respond = AsyncMock()
-        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(None, None))):
+        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(None, None, None))):
             await cmd._run_and_post(respond, 999, preview=False)
         respond.assert_awaited_once()
         assert "Couldn't fetch" in respond.await_args.args[0]
