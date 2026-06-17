@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from nf_core_bot.checks.github import IssueWithComments, get_issue_with_comments
-from nf_core_bot.proposals.bedrock import run_review_agent
+from nf_core_bot.proposals.bedrock import ProgressCb, run_review_agent
 from nf_core_bot.proposals.slack_utils import build_review_blocks
 
 logger = logging.getLogger(__name__)
@@ -63,10 +63,10 @@ def build_proposal_context(issue: IssueWithComments) -> str:
     return "\n".join(lines)
 
 
-async def generate_review_body(issue: IssueWithComments) -> str:
+async def generate_review_body(issue: IssueWithComments, on_progress: ProgressCb | None = None) -> str:
     """Run the skill against *issue* and return Claude's review body (Markdown)."""
     context = build_proposal_context(issue)
-    return await run_review_agent(_skill_prompt(), context)
+    return await run_review_agent(_skill_prompt(), context, on_progress=on_progress)
 
 
 def render_blocks(
@@ -97,7 +97,7 @@ def render_blocks(
 
 
 async def build_review_message(
-    number: int, core_team_mention: str = ""
+    number: int, core_team_mention: str = "", on_progress: ProgressCb | None = None
 ) -> tuple[IssueWithComments | None, list[dict[str, Any]] | None, str | None]:
     """Fetch issue *number*, run the review, return ``(issue, blocks, fallback_text)``.
 
@@ -106,6 +106,6 @@ async def build_review_message(
     issue = await get_issue_with_comments(number)
     if issue is None:
         return None, None, None
-    body = await generate_review_body(issue)
+    body = await generate_review_body(issue, on_progress=on_progress)
     blocks, fallback = render_blocks(issue, body, core_team_mention)
     return issue, blocks, fallback

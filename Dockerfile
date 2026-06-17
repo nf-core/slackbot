@@ -41,4 +41,11 @@ RUN pip install --no-cache-dir -e .
 RUN useradd --create-home botuser
 USER botuser
 
+# Pre-warm the nf-core CLI's local clone of the nf-core/modules repo (which also
+# holds the subworkflows). The first `nf-core modules info/list` otherwise clones
+# it at runtime (~2 min), stalling the first proposal review of each task. Run as
+# `botuser` so the cache lands in the HOME the container actually runs under.
+# Best-effort: a transient network hiccup at build time must not fail the build.
+RUN nf-core modules list remote > /dev/null 2>&1 || true
+
 CMD ["python", "-m", "nf_core_bot"]

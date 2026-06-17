@@ -10,7 +10,12 @@ from nf_core_bot.checks.github import NEW_PIPELINE_LABEL, get_issue_with_comment
 from nf_core_bot.db.proposals import claim_review, mark_reviewed, release_claim
 from nf_core_bot.proposals.parsing import extract_proposal_number, message_searchable_text
 from nf_core_bot.proposals.review import generate_review_body, render_blocks
-from nf_core_bot.proposals.slack_utils import core_team_mention, post_review, resolve_channel_id
+from nf_core_bot.proposals.slack_utils import (
+    core_team_mention,
+    make_progress_reporter,
+    post_review,
+    resolve_channel_id,
+)
 
 if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient
@@ -104,9 +109,26 @@ async def handle_proposal_message(event: dict[str, Any], client: AsyncWebClient)
             await release_claim(number)
             return
         mention = await core_team_mention(client)
-        body = await generate_review_body(issue)
+        # Live status in-thread while the (minutes-long) review runs; removed once
+        # the real review posts so the thread isn't cluttered.
+        status = await client.chat_postMessage(
+            channel=channel, thread_ts=ts, text=f":mag: Reviewing proposal #{number}… (this can take a minute)"
+        )
+        status_ts = status.get("ts")
+
+        async def _update_status(text: str) -> None:
+            if status_ts:
+                await client.chat_update(channel=channel, ts=status_ts, text=text)
+
+        reporter = make_progress_reporter(_update_status, max_posts=8)
+        body = await generate_review_body(issue, on_progress=reporter)
         blocks, fallback = render_blocks(issue, body, mention)
         await post_review(client, channel, blocks, fallback, thread_ts=ts)
+        if status_ts:
+            try:
+                await client.chat_delete(channel=channel, ts=status_ts)
+            except Exception:
+                logger.warning("Could not delete proposal-review status message", exc_info=True)
         await mark_reviewed(number, thread_ts=ts, channel=channel)
         logger.info("Posted automated review for proposal #%d", number)
     except Exception:
