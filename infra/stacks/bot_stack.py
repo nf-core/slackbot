@@ -19,6 +19,7 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
+    aws_iam as iam,
 )
 from constructs import Construct
 
@@ -159,8 +160,12 @@ class NfCoreBotStack(Stack):
                 "AWS_DEFAULT_REGION": "eu-west-1",
                 "DYNAMODB_TABLE": "nf-core-bot",
                 "CORE_TEAM_USERGROUP_HANDLE": "core-team",
+                "MAINTAINERS_USERGROUP_HANDLE": "maintainers-team",
                 "CALENDAR_S3_BUCKET": calendar_bucket.bucket_name,
                 "CALENDAR_CLOUDFRONT_DOMAIN": calendar_distribution.distribution_domain_name,
+                # Pipeline-proposal reviews (Claude via Bedrock)
+                "PROPOSALS_CHANNEL": "new-pipelines",
+                "BEDROCK_MODEL_ID": "eu.anthropic.claude-opus-4-8",
             },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="bot",
@@ -173,6 +178,20 @@ class NfCoreBotStack(Stack):
 
         # Grant the task role write access to the calendar S3 bucket
         calendar_bucket.grant_write(task_definition.task_role)
+
+        # Allow the task to invoke Claude on Bedrock for proposal reviews.
+        # Cross-region inference profiles route to foundation models in several
+        # regions, so the policy must cover both the profile and the underlying
+        # foundation-model ARNs (region wildcarded).
+        task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                resources=[
+                    f"arn:aws:bedrock:*:{self.account}:inference-profile/*.anthropic.claude-*",
+                    "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
+                ],
+            )
+        )
 
         # ----------------------------------------------------------------------
         # Fargate Service - single task, public IP for outbound internet.

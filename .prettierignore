@@ -4,3 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 infra/cdk.out/
+# Slack message template: line structure + `*bold*` are Slack mrkdwn, not Markdown
+src/nf_core_bot/proposals/templates/
+# Bundled review skill: kept verbatim from upstream, don't reflow
+src/nf_core_bot/proposals/skills/

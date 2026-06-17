@@ -12,10 +12,9 @@ import nf_core_bot.permissions.checks as perms
 
 @pytest.fixture(autouse=True)
 def _reset_cache() -> None:
-    """Clear the core-team cache before each test."""
-    perms._core_team_ids = set()
-    perms._core_team_fetched_at = 0.0
-    perms._core_team_lock = None
+    """Clear the user-group cache before each test."""
+    perms._usergroup_cache = {}
+    perms._usergroup_lock = None
 
 
 def _make_client(group_handle: str = "core-team", members: list[str] | None = None) -> AsyncMock:
@@ -24,12 +23,17 @@ def _make_client(group_handle: str = "core-team", members: list[str] | None = No
         members = ["U_ADMIN"]
 
     client = AsyncMock()
-    client.usergroups_list.return_value = {"usergroups": [{"id": "G123", "handle": group_handle}]}
+    client.usergroups_list.return_value = {"usergroups": [{"id": "S123", "handle": group_handle}]}
     client.usergroups_users_list.return_value = {"users": members}
     return client
 
 
-# ── refresh_core_team ────────────────────────────────────────────────
+def _expire(handle: str) -> None:
+    """Force the cached entry for *handle* to look stale."""
+    perms._usergroup_cache[handle].fetched_at = time.monotonic() - perms.CACHE_TTL - 1
+
+
+# ── refresh_core_team / refresh_usergroup ────────────────────────────
 
 
 class TestRefreshCoreTeam:
@@ -47,12 +51,25 @@ class TestRefreshCoreTeam:
         assert client.usergroups_list.await_count == 1
         assert client.usergroups_users_list.await_count == 1
 
+    async def test_separate_handles_cached_independently(self) -> None:
+        client = _make_client(members=["U1"])
+        client.usergroups_list.return_value = {
+            "usergroups": [
+                {"id": "S_CORE", "handle": "core-team"},
+                {"id": "S_MAINT", "handle": "maintainers-team"},
+            ]
+        }
+        await perms.refresh_core_team(client, "core-team")
+        await perms.refresh_core_team(client, "maintainers-team")
+        # Both handles fetched; both now cached.
+        assert client.usergroups_list.await_count == 2
+        assert set(perms._usergroup_cache) == {"core-team", "maintainers-team"}
+
     async def test_refreshes_after_ttl(self) -> None:
         client = _make_client(members=["U1"])
         await perms.refresh_core_team(client, "core-team")
 
-        # Fake TTL expiration
-        perms._core_team_fetched_at = time.monotonic() - perms.CACHE_TTL - 1
+        _expire("core-team")
 
         await perms.refresh_core_team(client, "core-team")
         assert client.usergroups_list.await_count == 2
@@ -67,8 +84,7 @@ class TestRefreshCoreTeam:
         client = _make_client(members=["U1"])
         await perms.refresh_core_team(client, "core-team")
 
-        # Expire cache
-        perms._core_team_fetched_at = time.monotonic() - perms.CACHE_TTL - 1
+        _expire("core-team")
 
         # Make the next call fail
         client.usergroups_list.side_effect = RuntimeError("network error")
@@ -76,6 +92,19 @@ class TestRefreshCoreTeam:
 
         # Should return stale data (the lock catches the exception)
         assert members == {"U1"}
+
+
+# ── get_usergroup_id ─────────────────────────────────────────────────
+
+
+class TestGetUsergroupId:
+    async def test_returns_subteam_id(self) -> None:
+        client = _make_client(members=["U1"])
+        assert await perms.get_usergroup_id(client, "core-team") == "S123"
+
+    async def test_returns_none_when_handle_unknown(self) -> None:
+        client = _make_client(group_handle="other-team")
+        assert await perms.get_usergroup_id(client, "core-team") is None
 
 
 # ── is_core_team ─────────────────────────────────────────────────────
@@ -103,3 +132,34 @@ class TestIsCoreTeam:
         importlib.reload(nf_core_bot.config)
 
         assert await perms.is_core_team(client, "U1") is True
+
+
+# ── is_maintainer / is_core_team_or_maintainers ──────────────────────
+
+
+class TestMaintainers:
+    def _two_group_client(self, core: list[str], maint: list[str]) -> AsyncMock:
+        client = AsyncMock()
+        client.usergroups_list.return_value = {
+            "usergroups": [
+                {"id": "S_CORE", "handle": "core-team"},
+                {"id": "S_MAINT", "handle": "maintainers-team"},
+            ]
+        }
+
+        async def _users(usergroup: str) -> dict[str, list[str]]:
+            return {"users": core if usergroup == "S_CORE" else maint}
+
+        client.usergroups_users_list.side_effect = _users
+        return client
+
+    async def test_is_maintainer_true(self) -> None:
+        client = self._two_group_client(core=["U_CORE"], maint=["U_MAINT"])
+        assert await perms.is_maintainer(client, "U_MAINT") is True
+        assert await perms.is_maintainer(client, "U_CORE") is False
+
+    async def test_either_group_grants_access(self) -> None:
+        client = self._two_group_client(core=["U_CORE"], maint=["U_MAINT"])
+        assert await perms.is_core_team_or_maintainers(client, "U_CORE") is True
+        assert await perms.is_core_team_or_maintainers(client, "U_MAINT") is True
+        assert await perms.is_core_team_or_maintainers(client, "U_NOBODY") is False
