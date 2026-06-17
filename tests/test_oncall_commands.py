@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -329,33 +330,47 @@ class TestOncallUnavailable:
 
     @patch("nf_core_bot.commands.oncall.unavailable.find_skip_replacement", new_callable=AsyncMock)
     async def test_auto_skips_overlapping_assignment(self, mock_find, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.helpers import monday_of_week
         from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
         from nf_core_bot.db.oncall import get_roster_entry, put_roster_entry
 
         mock_find.return_value = "U333"
 
-        await put_roster_entry("2026-06-01", "U111")
+        # Use a future week (relative to today) so the past-date guard never
+        # rejects the request as the calendar advances.
+        this_monday = monday_of_week(datetime.date.today())
+        future_monday = this_monday + datetime.timedelta(weeks=2)
+        week = future_monday.isoformat()
+        unavail_end = (future_monday + datetime.timedelta(days=6)).isoformat()
 
-        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-05-25"):
-            await handle_oncall_unavailable(respond, client, "U111", ["2026-05-31", "2026-06-07"])
+        await put_roster_entry(week, "U111")
+
+        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value=this_monday.isoformat()):
+            await handle_oncall_unavailable(respond, client, "U111", [week, unavail_end])
 
         # The overlapping week should be reassigned
-        entry = await get_roster_entry("2026-06-01")
+        entry = await get_roster_entry(week)
         assert entry is not None
         assert entry["assigned_user_id"] == "U333"
         assert entry["status"] == "skipped"
 
     @patch("nf_core_bot.commands.oncall.unavailable.find_skip_replacement", new_callable=AsyncMock)
     async def test_warns_when_no_replacement(self, mock_find, ddb_table, respond, client) -> None:
+        from nf_core_bot.commands.oncall.helpers import monday_of_week
         from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
         from nf_core_bot.db.oncall import put_roster_entry
 
         mock_find.return_value = None
 
-        await put_roster_entry("2026-06-01", "U111")
+        this_monday = monday_of_week(datetime.date.today())
+        future_monday = this_monday + datetime.timedelta(weeks=2)
+        week = future_monday.isoformat()
+        unavail_end = (future_monday + datetime.timedelta(days=6)).isoformat()
 
-        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value="2026-05-25"):
-            await handle_oncall_unavailable(respond, client, "U111", ["2026-05-31", "2026-06-07"])
+        await put_roster_entry(week, "U111")
+
+        with patch("nf_core_bot.commands.oncall.unavailable.current_week_start", return_value=this_monday.isoformat()):
+            await handle_oncall_unavailable(respond, client, "U111", [week, unavail_end])
 
         text = respond.call_args[1]["text"]
         assert "no replacement" in text.lower()
