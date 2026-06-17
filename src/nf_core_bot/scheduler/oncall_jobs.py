@@ -69,11 +69,12 @@ ONCALL_RESPONSIBILITIES = (
 )
 
 # Display heading for each proposal section, keyed by Proposal.section.
+# Each heading names the action the on-call person should take.
 _PROPOSAL_SECTION_HEADINGS = {
     "accepted": "*✅ Accepted pipelines — ready to set up:*",
     "rejected": "*🚫 Rejected pipelines — please close:*",
-    "pipeline": "*Open pipeline proposals:*",
-    "rfc": "*Open RFC proposals:*",
+    "pipeline": "*💬 Open pipeline proposals — please continue facilitating discussion:*",
+    "rfc": "*💬 Open RFC proposals — please continue facilitating discussion:*",
 }
 
 
