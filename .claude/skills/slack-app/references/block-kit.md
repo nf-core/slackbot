@@ -15,7 +15,8 @@ Used in the message `text` field and in `section`/`context` block text. It is
 - **inline code**: `` `code` `` ; **code block**: triple backticks
 - **link**: `<https://example.com|label>`
 - **user mention**: `<@U012ABC>`
-- **user-group mention**: `<!subteam^S012ABC>` (optionally `<!subteam^S012ABC|@handle>`)
+- **user-group mention**: `<!subteam^S012ABC>` (optionally
+  `<!subteam^S012ABC|@handle>`)
 - **@here / @channel**: `<!here>` / `<!channel>`
 - **emoji**: `:tada:`
 - **blockquote**: leading `>`
