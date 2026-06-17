@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nf_core_bot.forms.loader import get_active_form
-from nf_core_bot.permissions.checks import is_core_team, is_organiser_any_site
+from nf_core_bot.permissions.checks import is_core_team, is_core_team_or_maintainers, is_organiser_any_site
 
 if TYPE_CHECKING:
     from slack_bolt.context.ack.async_ack import AsyncAck as Ack
@@ -50,6 +50,11 @@ ONCALL_COMMANDS: list[tuple[str, str, str]] = [
 
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
+    (
+        "proposals review <issue-number> [preview]",
+        "Review an nf-core/proposals new-pipeline proposal (@core-team / @maintainers-team)",
+        "proposals",
+    ),
     ("on-call help", "Show on-call rotation commands (@core-team only)", "admin"),
     ("github help", "Show GitHub commands (@core-team only)", "admin"),
 ]
@@ -77,10 +82,11 @@ async def handle_help(
     await ack()
 
     admin = await is_core_team(client, user_id)
+    can_review = admin or await is_core_team_or_maintainers(client, user_id)
 
     visible: list[tuple[str, str, str]] = []
     for cmd, desc, role in GENERAL_COMMANDS:
-        if (role == "all") or (role == "admin" and admin):
+        if (role == "all") or (role == "admin" and admin) or (role == "proposals" and can_review):
             visible.append((cmd, desc, role))
 
     sections: list[str] = ["*nf-core bot — available commands*\n"]

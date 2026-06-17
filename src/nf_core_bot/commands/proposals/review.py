@@ -3,6 +3,10 @@
 The review is posted **in the conversation where the command was invoked** (a
 channel or DM), never cross-posted to the #new-pipelines thread. Running it in a
 DM is a private test; the ``preview`` keyword forces an ephemeral reply.
+
+Delivery uses the slash command's response URL (``respond``), not
+``chat.postMessage`` — so it works in any conversation the command was run from,
+including a user's self-DM where the bot isn't a member.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from nf_core_bot.proposals import spawn
 from nf_core_bot.proposals.review import build_review_message
-from nf_core_bot.proposals.slack_utils import post_review
+from nf_core_bot.proposals.slack_utils import chunk_message
 
 if TYPE_CHECKING:
     from slack_bolt.context.respond.async_respond import AsyncRespond as Respond
@@ -46,32 +50,23 @@ async def handle_proposals_review(
         await respond(_USAGE, response_type="ephemeral")
         return
 
-    channel_id = command.get("channel_id", "")
     await respond(
         f":hourglass_flowing_sand: Reviewing proposal #{number}… I'll post the result here shortly.",
         response_type="ephemeral",
     )
-    spawn(_run_and_post(client, number, channel_id, user_id, preview=preview))
+    spawn(_run_and_post(respond, number, preview=preview))
 
 
-async def _run_and_post(
-    client: AsyncWebClient,
-    number: int,
-    channel_id: str,
-    user_id: str,
-    *,
-    preview: bool,
-) -> None:
-    # Slash-command reviews never ping @core-team (mention left empty).
+async def _run_and_post(respond: Respond, number: int, *, preview: bool) -> None:
+    # Slash-command reviews never ping @core-team (mention left empty), and are
+    # delivered via the response URL so they land wherever the command was run.
     issue, text = await build_review_message(number, core_team_mention="")
     if issue is None or text is None:
-        await client.chat_postEphemeral(
-            channel=channel_id,
-            user=user_id,
-            text=f"Couldn't fetch proposal #{number} from `nf-core/proposals` — is the issue number correct?",
+        await respond(
+            f"Couldn't fetch proposal #{number} from `nf-core/proposals` — is the issue number correct?",
+            response_type="ephemeral",
         )
         return
-    if preview:
-        await post_review(client, channel_id, text, ephemeral_user=user_id)
-    else:
-        await post_review(client, channel_id, text)
+    response_type = "ephemeral" if preview else "in_channel"
+    for chunk in chunk_message(text):
+        await respond(chunk, response_type=response_type)
