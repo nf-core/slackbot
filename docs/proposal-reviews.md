@@ -44,16 +44,16 @@ still fires later.
 
 ## Configuration (env vars)
 
-| Var                            | Default                        | Notes                                                                            |
-| ------------------------------ | ------------------------------ | -------------------------------------------------------------------------------- |
-| `PROPOSALS_CHANNEL`            | `new-pipelines`                | Channel the listener watches                                                     |
-| `PROPOSALS_REVIEW_ENABLED`     | `true`                         | Set `false` to disable the auto-trigger                                          |
+| Var                            | Default                          | Notes                                                                                                                                            |
+| ------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PROPOSALS_CHANNEL`            | `new-pipelines`                  | Channel the listener watches                                                                                                                     |
+| `PROPOSALS_REVIEW_ENABLED`     | `true`                           | Set `false` to disable the auto-trigger                                                                                                          |
 | `BEDROCK_MODEL_ID`             | `eu.anthropic.claude-sonnet-4-6` | Bedrock inference-profile ID (note the `eu.` prefix in eu-west-1). Opus 4.8/4.7 are not yet entitled to the account (need AWS Sales — see below) |
-| `BEDROCK_REGION`               | —                              | Defaults to `AWS_REGION`                                                         |
-| `BEDROCK_THINKING`             | `adaptive`                     | `adaptive` or `off`                                                              |
-| `BEDROCK_MAX_TOKENS`           | `12000`                        | Max tokens per model turn                                                        |
-| `MAINTAINERS_USERGROUP_HANDLE` | `maintainers-team`             | Slack user-group handle                                                          |
-| `PROPOSALS_GITHUB_TOKEN`       | —                              | Optional read-only token for the `gh`/scripts tool; falls back to `GITHUB_TOKEN` |
+| `BEDROCK_REGION`               | —                                | Defaults to `AWS_REGION`                                                                                                                         |
+| `BEDROCK_THINKING`             | `adaptive`                       | `adaptive` or `off`                                                                                                                              |
+| `BEDROCK_MAX_TOKENS`           | `12000`                          | Max tokens per model turn                                                                                                                        |
+| `MAINTAINERS_USERGROUP_HANDLE` | `maintainers-team`               | Slack user-group handle                                                                                                                          |
+| `PROPOSALS_GITHUB_TOKEN`       | —                                | Optional read-only token for the `gh`/scripts tool; falls back to `GITHUB_TOKEN`                                                                 |
 
 ## One-time setup
 
@@ -73,12 +73,12 @@ These are the parts that aren't handled by the deploy pipeline.
 
 ### AWS (handled in CDK)
 
-- The bot uses **`eu.anthropic.claude-sonnet-4-6`** on Bedrock. Claude Opus 4.8/4.7
-  return `AccessDeniedException` ("not available for this account") on the nf-core
-  account (`728131696474`) — the latest Opus models are gated behind an AWS Sales
-  provisioning step. Sonnet 4.6, Sonnet 4.5 and Haiku 4.5 are all available. To
-  move to Opus once provisioned, see "Requesting Opus access" below and flip
-  `BEDROCK_MODEL_ID` back to `eu.anthropic.claude-opus-4-8`.
+- The bot uses **`eu.anthropic.claude-sonnet-4-6`** on Bedrock. Claude Opus
+  4.8/4.7 return `AccessDeniedException` ("not available for this account") on
+  the nf-core account (`728131696474`) — the latest Opus models are gated behind
+  an AWS Sales provisioning step. Sonnet 4.6, Sonnet 4.5 and Haiku 4.5 are all
+  available. To move to Opus once provisioned, see "Requesting Opus access"
+  below and flip `BEDROCK_MODEL_ID` back to `eu.anthropic.claude-opus-4-8`.
 - The ECS task role is granted `bedrock:InvokeModel*` for Claude inference
   profiles + foundation models in `infra/stacks/bot_stack.py`.
 - `gh`, `jq` and the `nf-core` CLI are installed in the container image
@@ -87,12 +87,13 @@ These are the parts that aren't handled by the deploy pipeline.
 ### Requesting Opus access (optional)
 
 The "not available for this account / contact AWS Sales" error for Claude Opus
-4.8/4.7 is an account-level entitlement gate, not a settings change. To enable it:
+4.8/4.7 is an account-level entitlement gate, not a settings change. To enable
+it:
 
 1. Engage your AWS account team / Technical Account Manager, or open a case via
    [AWS Sales](https://aws.amazon.com/contact-us/sales-support/), requesting
-   Amazon Bedrock access to **Anthropic Claude Opus 4.8** (`anthropic.claude-opus-4-8`)
-   in **eu-west-1** for account **728131696474**.
+   Amazon Bedrock access to **Anthropic Claude Opus 4.8**
+   (`anthropic.claude-opus-4-8`) in **eu-west-1** for account **728131696474**.
 2. If you have an AWS Support plan, a support case ("Bedrock model access —
    Anthropic Claude Opus") is usually the fastest route; include the account ID,
    region, model, and use case.
