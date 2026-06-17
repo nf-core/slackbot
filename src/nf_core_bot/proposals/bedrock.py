@@ -30,6 +30,9 @@ MAX_ITERATIONS = 25
 _client: AsyncAnthropicBedrock | None = None
 
 ToolRunner = Callable[[str], Awaitable[str]]
+# Phase callback: (tool_round, last_command). tool_round is the running count of
+# completed research rounds; -1 signals "research done, composing the review".
+ProgressCb = Callable[[int, str], Awaitable[None]]
 
 
 def _get_client() -> AsyncAnthropicBedrock:
@@ -62,24 +65,38 @@ def _create_kwargs(system: str, messages: list[dict[str, Any]]) -> dict[str, Any
     return kwargs
 
 
+async def _emit(on_progress: ProgressCb | None, round_: int, command: str) -> None:
+    """Fire the progress callback, never letting it break the review."""
+    if on_progress is None:
+        return
+    try:
+        await on_progress(round_, command)
+    except Exception:
+        logger.exception("proposal-review progress callback failed")
+
+
 async def run_review_agent(
     system_prompt: str,
     proposal_context: str,
     *,
     tool_runner: ToolRunner | None = None,
+    on_progress: ProgressCb | None = None,
     max_iterations: int = MAX_ITERATIONS,
 ) -> str:
     """Drive the review to completion and return Claude's final review text.
 
     *system_prompt* is the skill (``SKILL.md``); *proposal_context* is the issue
     body + comments. *tool_runner* executes the ``run_command`` tool (defaults to
-    the real read-only runner; injectable for tests).
+    the real read-only runner; injectable for tests). *on_progress*, if given, is
+    called after each research round and once more (round -1) when the model stops
+    calling tools and starts composing — used to post phase updates to Slack.
     """
     run_tool = tool_runner or default_run_command
     client = _get_client()
     messages: list[dict[str, Any]] = [{"role": "user", "content": proposal_context}]
 
     response = None
+    rounds = 0
     for _ in range(max_iterations):
         response = await client.messages.create(**_create_kwargs(system_prompt, messages))
 
@@ -88,23 +105,27 @@ async def run_review_agent(
             return "_The model declined to produce a review for this proposal._"
 
         if response.stop_reason != "tool_use":
-            # end_turn (or max_tokens) — we have the final text.
+            # end_turn (or max_tokens) — research is done, the text is written.
+            await _emit(on_progress, -1, "")
             return _text_from(response.content)
 
         # Execute the requested tool calls and feed the results back.
         messages.append({"role": "assistant", "content": response.content})
         tool_results: list[dict[str, Any]] = []
+        last_command = ""
         for block in response.content:
             if getattr(block, "type", None) != "tool_use":
                 continue
             if block.name == TOOL_NAME:
-                command = (block.input or {}).get("command", "")
-                logger.info("proposal-review tool call: %s", command)
-                result = await run_tool(command)
+                last_command = (block.input or {}).get("command", "")
+                logger.info("proposal-review tool call: %s", last_command)
+                result = await run_tool(last_command)
             else:
                 result = f"ERROR: unknown tool {block.name!r}"
             tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result})
         messages.append({"role": "user", "content": tool_results})
+        rounds += 1
+        await _emit(on_progress, rounds, last_command)
 
     logger.warning("proposal review hit the %d-iteration cap", max_iterations)
     return _text_from(response.content) if response is not None else ""

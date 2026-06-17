@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from nf_core_bot import config
 from nf_core_bot.permissions.checks import get_usergroup_id
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from slack_sdk.web.async_client import AsyncWebClient
 
 logger = logging.getLogger(__name__)
@@ -56,6 +59,45 @@ async def core_team_mention(client: AsyncWebClient) -> str:
     handle = config.CORE_TEAM_USERGROUP_HANDLE or "core-team"
     group_id = await get_usergroup_id(client, handle)
     return f"<!subteam^{group_id}>" if group_id else "`@core-team`"
+
+
+def make_progress_reporter(
+    post: Callable[[str], Awaitable[Any]],
+    *,
+    min_interval: float = 25.0,
+    max_posts: int = 4,
+) -> Callable[[int, str], Awaitable[None]]:
+    """Build a throttled progress callback for ``run_review_agent``'s on_progress.
+
+    *post(text)* delivers one status line (e.g. an ephemeral ``respond`` with
+    ``replace_original`` for slash, or a ``chat_update`` for a thread). Reviews
+    make many research rounds, so updates are throttled to one per *min_interval*
+    seconds and capped at *max_posts* — important for the slash path, where the
+    response URL only accepts ~5 calls total. The first research round and the
+    final "composing" signal (round -1) always post.
+    """
+    state = {"posts": 0, "last": 0.0}
+
+    async def report(round_: int, command: str = "") -> None:
+        now = time.monotonic()
+        if round_ == -1:
+            text = "✍️ Analysis done — writing the review…"
+            forced = True
+        else:
+            checks = f"{round_} check{'' if round_ == 1 else 's'}"
+            text = f"🔎 Researching nf-core modules & pipeline overlap… ({checks} so far)"
+            forced = state["posts"] == 0
+        if not forced and (state["posts"] >= max_posts or now - state["last"] < min_interval):
+            return
+        try:
+            await post(text)
+        except Exception:
+            logger.exception("proposal-review progress update failed")
+            return
+        state["posts"] += 1
+        state["last"] = now
+
+    return report
 
 
 def chunk_message(text: str, limit: int = _MD_BLOCK_LIMIT) -> list[str]:
