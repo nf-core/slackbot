@@ -58,28 +58,27 @@ class TestHandler:
 
 
 class TestRunAndPost:
-    async def test_visible_post(self) -> None:
-        with (
-            patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))),
-            patch.object(cmd, "post_review", new=AsyncMock()) as post,
-        ):
-            await cmd._run_and_post(AsyncMock(), 148, "C1", "U1", preview=False)
-        post.assert_awaited_once()
-        assert post.await_args.kwargs.get("ephemeral_user") is None
+    async def test_visible_post_uses_response_url(self) -> None:
+        respond = AsyncMock()
+        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))):
+            await cmd._run_and_post(respond, 148, preview=False)
+        respond.assert_awaited_once()
+        assert respond.await_args.kwargs.get("response_type") == "in_channel"
+        assert respond.await_args.args[0] == "TEXT"
 
     async def test_preview_is_ephemeral(self) -> None:
-        with (
-            patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))),
-            patch.object(cmd, "post_review", new=AsyncMock()) as post,
-        ):
-            await cmd._run_and_post(AsyncMock(), 148, "C1", "U1", preview=True)
-        assert post.await_args.kwargs.get("ephemeral_user") == "U1"
+        respond = AsyncMock()
+        with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(_issue(), "TEXT"))):
+            await cmd._run_and_post(respond, 148, preview=True)
+        assert respond.await_args.kwargs.get("response_type") == "ephemeral"
 
-    async def test_missing_issue_warns(self) -> None:
-        client = AsyncMock()
+    async def test_missing_issue_warns_ephemerally(self) -> None:
+        respond = AsyncMock()
         with patch.object(cmd, "build_review_message", new=AsyncMock(return_value=(None, None))):
-            await cmd._run_and_post(client, 999, "C1", "U1", preview=False)
-        client.chat_postEphemeral.assert_awaited_once()
+            await cmd._run_and_post(respond, 999, preview=False)
+        respond.assert_awaited_once()
+        assert "Couldn't fetch" in respond.await_args.args[0]
+        assert respond.await_args.kwargs.get("response_type") == "ephemeral"
 
 
 class TestRouterGate:

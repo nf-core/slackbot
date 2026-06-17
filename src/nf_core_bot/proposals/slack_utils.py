@@ -58,7 +58,7 @@ async def core_team_mention(client: AsyncWebClient) -> str:
     return f"<!subteam^{group_id}>" if group_id else "`@core-team`"
 
 
-def _chunk(text: str) -> list[str]:
+def chunk_message(text: str) -> list[str]:
     """Split *text* into Slack-sized chunks on paragraph boundaries."""
     if len(text) <= _CHUNK_CHARS:
         return [text]
@@ -90,7 +90,7 @@ async def post_review(
     (used for ``preview`` runs). Returns the ``ts`` of the first posted message
     (None for ephemeral posts).
     """
-    chunks = _chunk(text)
+    chunks = chunk_message(text)
     first_ts: str | None = None
     for i, chunk in enumerate(chunks):
         if ephemeral_user:
