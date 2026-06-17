@@ -30,17 +30,21 @@ class TestContext:
         assert "#148" in ctx
 
 
-class TestRender:
-    def test_with_mention(self) -> None:
-        msg = review.render_message(_issue(), "THE REVIEW", "<!subteam^S1>")
-        assert "<!subteam^S1>" in msg
-        assert "THE REVIEW" in msg
-        assert "#148" in msg
+class TestRenderBlocks:
+    def test_structure_with_mention(self) -> None:
+        blocks, fallback = review.render_blocks(_issue(), "THE REVIEW", "<!subteam^S1>")
+        # Header section carries the mention + linked title.
+        assert blocks[0]["type"] == "section"
+        assert "<!subteam^S1>" in blocks[0]["text"]["text"]
+        assert "#148" in blocks[0]["text"]["text"]
+        # Body goes in a markdown block (proper bullet/nesting rendering).
+        md = [b for b in blocks if b["type"] == "markdown"]
+        assert md and "THE REVIEW" in md[0]["text"]
+        assert "#148" in fallback
 
-    def test_without_mention_no_stray_blank(self) -> None:
-        msg = review.render_message(_issue(), "THE REVIEW", "")
-        assert "THE REVIEW" in msg
-        assert "\n\n\n" not in msg
+    def test_no_mention(self) -> None:
+        blocks, _ = review.render_blocks(_issue(), "THE REVIEW", "")
+        assert "subteam" not in blocks[0]["text"]["text"]
 
 
 class TestSkillPrompt:
@@ -58,12 +62,15 @@ class TestBuildReviewMessage:
             patch.object(review, "get_issue_with_comments", new=AsyncMock(return_value=issue)),
             patch.object(review, "run_review_agent", new=AsyncMock(return_value="REVIEW BODY")),
         ):
-            got_issue, text = await review.build_review_message(148, "<!subteam^S1>")
+            got_issue, blocks, fallback = await review.build_review_message(148, "<!subteam^S1>")
         assert got_issue is issue
-        assert text is not None and "REVIEW BODY" in text
+        assert blocks is not None
+        assert any(b["type"] == "markdown" and "REVIEW BODY" in b["text"] for b in blocks)
+        assert fallback is not None and "#148" in fallback
 
     async def test_missing_issue(self) -> None:
         with patch.object(review, "get_issue_with_comments", new=AsyncMock(return_value=None)):
-            got_issue, text = await review.build_review_message(999, "")
+            got_issue, blocks, fallback = await review.build_review_message(999, "")
         assert got_issue is None
-        assert text is None
+        assert blocks is None
+        assert fallback is None

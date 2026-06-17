@@ -65,12 +65,12 @@ async def handle_review_proposal_shortcut(
 
 async def _run_and_post(client: AsyncWebClient, number: int, channel_id: str, thread_ts: str) -> None:
     mention = await core_team_mention(client)
-    issue, text = await build_review_message(number, core_team_mention=mention)
-    if issue is None or text is None:
+    issue, blocks, fallback = await build_review_message(number, core_team_mention=mention)
+    if issue is None or blocks is None:
         await client.chat_postMessage(
             channel=channel_id,
             thread_ts=thread_ts,
             text=f"Couldn't fetch proposal #{number} from `nf-core/proposals`.",
         )
         return
-    await post_review(client, channel_id, text, thread_ts=thread_ts)
+    await post_review(client, channel_id, blocks, fallback or "", thread_ts=thread_ts)

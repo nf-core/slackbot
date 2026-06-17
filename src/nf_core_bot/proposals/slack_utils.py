@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Keep each posted chunk well under Slack's per-message limits.
-_CHUNK_CHARS = 3500
+# Slack `markdown` blocks cap at 12,000 chars cumulatively; stay safely under.
+_MD_BLOCK_LIMIT = 11000
 
 _channel_cache: dict[str, str] = {}
 
@@ -58,15 +58,15 @@ async def core_team_mention(client: AsyncWebClient) -> str:
     return f"<!subteam^{group_id}>" if group_id else "`@core-team`"
 
 
-def chunk_message(text: str) -> list[str]:
-    """Split *text* into Slack-sized chunks on paragraph boundaries."""
-    if len(text) <= _CHUNK_CHARS:
+def chunk_message(text: str, limit: int = _MD_BLOCK_LIMIT) -> list[str]:
+    """Split *text* into chunks no larger than *limit*, on paragraph boundaries."""
+    if len(text) <= limit:
         return [text]
     chunks: list[str] = []
     current = ""
     for para in text.split("\n\n"):
         candidate = f"{current}\n\n{para}" if current else para
-        if len(candidate) > _CHUNK_CHARS and current:
+        if len(candidate) > limit and current:
             chunks.append(current)
             current = para
         else:
@@ -76,32 +76,36 @@ def chunk_message(text: str) -> list[str]:
     return chunks
 
 
+def build_review_blocks(header: str, body: str, footer: str) -> list[dict[str, Any]]:
+    """Assemble the review into Block Kit blocks for a single Slack message.
+
+    * *header* → a ``section`` (mrkdwn) so the ``<!subteam^…>`` mention notifies
+      and the ``<url|title>`` link renders;
+    * *body* → one or more ``markdown`` blocks so standard Markdown (nested
+      bullets, bold, code blocks) renders natively rather than as literal text;
+    * *footer* → a small ``context`` block.
+    """
+    blocks: list[dict[str, Any]] = [{"type": "section", "text": {"type": "mrkdwn", "text": header}}]
+    blocks += [{"type": "markdown", "text": chunk} for chunk in chunk_message(body)]
+    if footer:
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": footer}]})
+    return blocks
+
+
 async def post_review(
     client: AsyncWebClient,
     channel: str,
+    blocks: list[dict[str, Any]],
     text: str,
     *,
     thread_ts: str | None = None,
-    ephemeral_user: str | None = None,
 ) -> str | None:
-    """Post *text* to *channel*, splitting into multiple messages if long.
+    """Post the review as a single Block Kit message; return its ``ts``.
 
-    When *ephemeral_user* is set the message is posted ephemerally to that user
-    (used for ``preview`` runs). Returns the ``ts`` of the first posted message
-    (None for ephemeral posts).
+    *text* is the short plain-text fallback (notifications / accessibility).
     """
-    chunks = chunk_message(text)
-    first_ts: str | None = None
-    for i, chunk in enumerate(chunks):
-        if ephemeral_user:
-            await client.chat_postEphemeral(channel=channel, user=ephemeral_user, text=chunk)
-            continue
-        kwargs: dict[str, Any] = {"channel": channel, "text": chunk}
-        # Keep multi-chunk posts together in a thread under the first chunk.
-        ts = thread_ts or first_ts
-        if ts:
-            kwargs["thread_ts"] = ts
-        resp = await client.chat_postMessage(**kwargs)
-        if i == 0:
-            first_ts = resp.get("ts")
-    return first_ts
+    kwargs: dict[str, Any] = {"channel": channel, "blocks": blocks, "text": text}
+    if thread_ts:
+        kwargs["thread_ts"] = thread_ts
+    resp = await client.chat_postMessage(**kwargs)
+    return resp.get("ts")

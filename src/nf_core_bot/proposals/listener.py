@@ -9,7 +9,7 @@ from nf_core_bot import config
 from nf_core_bot.checks.github import NEW_PIPELINE_LABEL, get_issue_with_comments
 from nf_core_bot.db.proposals import claim_review, mark_reviewed, release_claim
 from nf_core_bot.proposals.parsing import extract_proposal_number, message_searchable_text
-from nf_core_bot.proposals.review import generate_review_body, render_message
+from nf_core_bot.proposals.review import generate_review_body, render_blocks
 from nf_core_bot.proposals.slack_utils import core_team_mention, post_review, resolve_channel_id
 
 if TYPE_CHECKING:
@@ -105,8 +105,8 @@ async def handle_proposal_message(event: dict[str, Any], client: AsyncWebClient)
             return
         mention = await core_team_mention(client)
         body = await generate_review_body(issue)
-        text = render_message(issue, body, mention)
-        await post_review(client, channel, text, thread_ts=ts)
+        blocks, fallback = render_blocks(issue, body, mention)
+        await post_review(client, channel, blocks, fallback, thread_ts=ts)
         await mark_reviewed(number, thread_ts=ts, channel=channel)
         logger.info("Posted automated review for proposal #%d", number)
     except Exception:
