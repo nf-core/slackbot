@@ -81,6 +81,10 @@ Look specifically for:
 - Pipelines using overlapping tool sets even if differently framed
 - Archived pipelines that cover the space (may be revivable)
 
+When you find a strong overlap, look up that pipeline's maintainers' GitHub
+usernames now — you'll need them for the report and draft comment. See "Find and
+name the overlapping pipeline's maintainers" in the pitfalls section.
+
 ## Step 2: Apply the four criteria
 
 Evaluate each and note your evidence — a short phrase is fine, you don't need
@@ -155,9 +159,11 @@ Your entire response is rendered verbatim in a Slack Markdown block. Standard
 Markdown renders natively: `**bold**`, `-` bullets with two-space nested
 indentation, `[text](url)` links, and code blocks.
 
-- **No preamble, no meta-commentary.** Never write "Here is the review", "I have
-  enough to…", or similar. Start directly with the overall-score line. Do not add
-  `---` separators or a top-level heading — the bot adds the title.
+- **No preamble, no meta-commentary.** Start directly with the overall-score
+  line. Never write "Here is the review", "I have enough to…", or similar, and do
+  not add `---` separators or a top-level heading. The bot's wrapper supplies the
+  title, the `@core-team` tag, and the automated/non-binding disclaimer above your
+  body — do not write your own disclaimer.
 - **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
   under ~1500 characters. Short bullets, not paragraphs. Cut anything a
   maintainer doesn't need to decide.
@@ -182,6 +188,12 @@ surrounding explanation):
 >
 > - 2–3 short bullets: what it does, the gap it fills, the main risk.
 >
+> **Suggested reviewers** (whenever there's pipeline overlap — see the pitfalls
+> section for how to find them)
+>
+> - up to three `@username` handles — the people who actually drive <overlapping
+>   pipeline>; worth pinging on GitHub and in the relevant Slack channel.
+>
 > **Blockers / conditions** (only if relevant)
 >
 > - one-line bullets; nest sub-points with two-space indentation if needed.
@@ -202,6 +214,8 @@ triple-backtick code block so a maintainer can copy it. Inside that block:
   existing thread.
 - If the scores point to a poor fit, offer a concrete path forward where one
   exists (a subworkflow PR to an adjacent pipeline, a SIG consultation, etc.).
+- If there's pipeline overlap, @-mention the maintainers you found (same handles
+  as the Slack **Suggested reviewers** line) so they're looped into the thread.
 - If you're not familiar with the domain, say so — flagging an apparent overlap
   from a non-expert perspective is still valuable.
 
@@ -258,7 +272,37 @@ will otherwise ask whether a plugin would suffice.
 feedback round. This affects the realistic approval timeline and can justify a
 softer close.
 
-**Ping the relevant pipeline leads**: If the proposal overlaps with an existing
-pipeline, suggest directly pinging the leads of that pipeline on GitHub and in
-the relevant Slack channel. This is often more effective than waiting for them
-to find the proposal thread.
+**Find and name the overlapping pipeline's maintainers**: When the proposal
+overlaps an existing pipeline, don't just say "ping the leads" — actually look up
+their GitHub usernames and put them in both the Slack **Suggested reviewers**
+line and the draft GitHub comment so they can be @-mentioned.
+
+**Tag at most three people, and only the ones who genuinely drive the pipeline.**
+Every nf-core pipeline has a small core of heavy contributors plus a long tail of
+people with one or two commits — the long tail must NOT be tagged. Start from the
+designated code owners, which is exactly this short list:
+
+```bash
+gh api -H "Accept: application/vnd.github.raw" repos/nf-core/<pipeline>/contents/.github/CODEOWNERS
+```
+
+If there's no `CODEOWNERS`, rank contributors by contribution count and keep only
+the clear leaders — drop anyone whose count is a small fraction of the top
+contributor's:
+
+```bash
+gh api 'repos/nf-core/<pipeline>/contributors?per_page=100' --jq 'sort_by(-.contributions) | .[:10] | map({login, contributions})'
+```
+
+For an older pipeline whose original authors have moved on, prefer whoever is
+actually active now — cross-check recent committers and favour them:
+
+```bash
+gh api 'repos/nf-core/<pipeline>/commits?per_page=100' --jq '[.[].author.login] | group_by(.) | map({login: .[0], n: length}) | sort_by(-.n)'
+```
+
+List the resulting **one to three** `@username` handles (comma-separated) and
+suggest pinging them on GitHub and in the relevant Slack channel — far more
+effective than waiting for them to find the proposal thread. If you genuinely
+can't resolve a handle, name the pipeline and say its maintainers should be
+looped in rather than inventing or over-tagging.
