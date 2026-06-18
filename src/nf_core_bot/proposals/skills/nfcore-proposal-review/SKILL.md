@@ -1,7 +1,7 @@
 ---
 name: nfcore-proposal-review
 description: >-
-  Review an nf-core new pipeline proposal and produce a structured verdict with
+  Review an nf-core new pipeline proposal and produce a scored assessment with
   a draft GitHub comment. Use whenever given a link, issue number, or
   description from the nf-core/proposals repository, or when asked whether a
   proposed bioinformatics pipeline should be accepted into nf-core. Triggers on
@@ -15,10 +15,11 @@ description: >-
 # nf-core New Pipeline Proposal Review
 
 Proposals live at https://github.com/nf-core/proposals/issues (label:
-`new-pipeline`). The goal is a structured verdict that helps the maintainer team
-reach a decision, posted as a single Slack message. This is not a scientific
-peer review — even "I'm not familiar with the area, but looks alright" is a
-useful contribution.
+`new-pipeline`). The goal is a structured, scored assessment that helps the
+maintainer team reach a decision, posted as a single Slack message. The bot
+scores and advises; the accept/reject decision is always the maintainers', never
+the bot's. This is not a scientific peer review — even "I'm not familiar with the
+area, but looks alright" is a useful contribution.
 
 The triggering proposal is already provided: its body and every comment are
 included in the user message. Start with the overlap research (Step 1) — do not
@@ -59,7 +60,7 @@ For each tool this checks nf-core/modules presence and which pipeline `main.nf`
 files reference it. If several proposed tools are already used together in an
 existing pipeline, that's a strong overlap signal.
 
-Map the overlap pattern to a verdict hint:
+Map the overlap pattern to a scoring hint:
 
 | Tool overlap pattern                                              | What it suggests                                                  |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -131,15 +132,22 @@ subworkflow to an existing pipeline, that's probably the right path.
   This is a risk factor, not a hard reject, but it should prompt a "do you have
   collaborators?" question before approval.
 
-## Step 3: Classify the verdict
+## Step 3: Score the proposal
 
-| Verdict                  | When to use                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **Clear Reject**         | Fails workflow specificity with no salvage path, OR untestable in CI                                                |
-| **Conditional Accept**   | Novel gap, passes specificity, conditions are not blockers                                                          |
-| **Request changes**      | Fails as proposed (usually specificity) but has a genuine novel component worth steering toward a different framing |
-| **Borderline**           | Passes hard criteria but has real sustainability or scope risk; needs a conversation before approval                |
-| **Needs More Info**      | Can't assess without a specific answer from the proposer; include the question                                      |
+Give an **overall score out of 5**, plus a score out of 5 for each of the four
+criteria. The score is advice for the maintainer team — it is not a decision, and
+you never "accept" or "reject" anything yourself.
+
+| Overall | Emoji | Meaning                                                                                |
+| ------- | ----- | -------------------------------------------------------------------------------------- |
+| 5/5     | 🟢    | Strong fit — clear novel gap, passes specificity, testable, sustainable                |
+| 4/5     | 🟢    | Good fit — minor conditions, no blockers                                               |
+| 3/5     | 🟡    | Borderline — real merit but notable scope or sustainability concerns; needs discussion |
+| 2/5     | 🔴    | Weak fit — significant overlap or specificity problems; salvageable only by reframing  |
+| 1/5     | 🔴    | Poor fit — fails specificity with no salvage path, or untestable in CI                 |
+
+If a criterion can't be assessed without an answer from the proposer, score it
+`—/5` and state the question rather than guessing.
 
 ## Step 4: Produce the Slack message
 
@@ -148,7 +156,7 @@ Markdown renders natively: `**bold**`, `-` bullets with two-space nested
 indentation, `[text](url)` links, and code blocks.
 
 - **No preamble, no meta-commentary.** Never write "Here is the review", "I have
-  enough to…", or similar. Start directly with the verdict line. Do not add
+  enough to…", or similar. Start directly with the overall-score line. Do not add
   `---` separators or a top-level heading — the bot adds the title.
 - **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
   under ~1500 characters. Short bullets, not paragraphs. Cut anything a
@@ -156,19 +164,19 @@ indentation, `[text](url)` links, and code blocks.
 - **Do not wrap the message in a code block.** The only code block in your output
   is the draft GitHub comment at the end.
 
-Emoji key: ✅ pass/accept, ⚠️ partial/borderline, ❌ fail/reject; 🟢/🟡/🔴 =
-low/med/high risk.
+Emoji key: 🟢 strong (score 4–5/5), 🟡 mixed (3/5), 🔴 weak (1–2/5); for the
+bar-style criteria ✅ bar met, ⚠️ partial, ❌ not met. Every score is `N/5`.
 
 Follow this structure (these lines are the literal Markdown to emit, minus this
 surrounding explanation):
 
-> **Verdict: ✅ Conditional Accept**
+> **Overall: 🟡 3/5**
 >
-> - **Novelty:** one line, or "none identified"
+> - **Novelty:** 🟢 4/5 — one line, or "none identified"
 > - **Overlap:** most relevant existing pipeline(s), one line
-> - **Specificity:** ✅ Pass — ≤8 words
-> - **Testability:** ⚠️ Partial — ≤8 words
-> - **Sustainability:** 🔴 Low — ≤8 words
+> - **Specificity:** ❌ 2/5 — ≤8 words
+> - **Testability:** ✅ 5/5 — ≤8 words
+> - **Sustainability:** 🔴 2/5 — ≤8 words
 >
 > **Why**
 >
@@ -177,8 +185,8 @@ surrounding explanation):
 > **Blockers / conditions** (only if relevant)
 >
 > - one-line bullets; nest sub-points with two-space indentation if needed.
->   Distinguish blockers (must resolve before `/approve`) from softer conditions
->   and optional suggestions.
+>   Distinguish blockers (would need resolving before the proposal could be
+>   accepted) from softer conditions and optional suggestions.
 
 Then add the **draft GitHub comment** as the final element, wrapped in a single
 triple-backtick code block so a maintainer can copy it. Inside that block:
@@ -187,11 +195,13 @@ triple-backtick code block so a maintainer can copy it. Inside that block:
 - **Do not hard-wrap** — put each paragraph and each bullet on ONE line with a
   blank line between paragraphs. A stray mid-paragraph newline renders as a
   `<br>` on GitHub.
-- Use `/approve` or `/reject` per nf-core convention (two `/reject` comments =
-  rejection).
+- **Never write `/approve` or `/reject` yourself.** Those commands are the
+  maintainers' decision, not the bot's. Write the comment as an assessment a
+  maintainer can post; they add the command if they agree.
 - Tone: direct and constructive, not corporate. Match the formality of the
   existing thread.
-- If rejecting, offer a concrete path forward where one exists.
+- If the scores point to a poor fit, offer a concrete path forward where one
+  exists (a subworkflow PR to an adjacent pipeline, a SIG consultation, etc.).
 - If you're not familiar with the domain, say so — flagging an apparent overlap
   from a non-expert perspective is still valuable.
 
