@@ -1,53 +1,56 @@
 ---
 name: nfcore-proposal-review
-description: Review an nf-core new pipeline proposal and produce a structured verdict with a draft GitHub comment. Use whenever given a link, issue number, or description from the nf-core/proposals repository, or when asked whether a proposed bioinformatics pipeline should be accepted into nf-core. Triggers on: "review this proposal", "should we accept this", "nf-core/proposals#NNN", any github.com/nf-core/proposals link, "is this a good nf-core pipeline?", or any mention of evaluating a pipeline proposal against nf-core criteria. Always invoke this skill rather than doing an ad-hoc review — it handles the research, overlap checking, and structured output.
+description: >-
+  Review an nf-core new pipeline proposal and produce a scored assessment with
+  a draft GitHub comment. Use whenever given a link, issue number, or
+  description from the nf-core/proposals repository, or when asked whether a
+  proposed bioinformatics pipeline should be accepted into nf-core. Triggers on
+  "review this proposal", "should we accept this", "nf-core/proposals#NNN", any
+  github.com/nf-core/proposals link, "is this a good nf-core pipeline?", or any
+  mention of evaluating a pipeline proposal against nf-core criteria. Always
+  invoke this skill rather than doing an ad-hoc review — it handles the
+  research, overlap checking, and structured output.
 ---
 
 # nf-core New Pipeline Proposal Review
 
 Proposals live at https://github.com/nf-core/proposals/issues (label:
-`new-pipeline`). The goal is a structured verdict that helps the maintainer team
-reach a decision. This is not a scientific peer review — even "I'm not familiar
-with the area, but looks alright" is a useful contribution.
+`new-pipeline`). The goal is a structured, scored assessment that helps the
+maintainer team reach a decision, posted as a single Slack message. The bot
+scores and advises; the accept/reject decision is always the maintainers', never
+the bot's. This is not a scientific peer review — even "I'm not familiar with the
+area, but looks alright" is a useful contribution.
 
-Scripts are in `scripts/` alongside this file. `<skill-dir>` = the base
-directory shown in the skill header when this skill was loaded.
+The triggering proposal is already provided: its body and every comment are
+included in the user message. Start with the overlap research (Step 1) — do not
+try to re-fetch the issue.
 
-## Mode: single proposal vs. batch sweep
+## Tooling
 
-**Single proposal**: given a number, URL, or name - review that one proposal and
-produce a verdict + draft comment.
+You have one tool, `run_command`, a read-only command runner. Through it you can
+run:
 
-**Batch sweep**: asked to "review all open proposals" or "give me a summary of
-what's in the queue" - fetch all open proposals, review each one, produce the
-quick-map table at the end. Takes longer but is the right tool when a maintainer
-needs to triage the whole queue. Use the same criteria for each entry, and group
-them by verdict category in the output.
+- the bundled scripts in `scripts/` alongside this file. Use the exact
+  `<skill-dir>` absolute path given in the prompt:
+  - `bash <skill-dir>/scripts/check_tools.sh <tool1> [tool2 ...]`
+  - `bash <skill-dir>/scripts/list_pipelines.sh`
+  - `bash <skill-dir>/scripts/fetch_proposal.sh [NUMBER]` — only needed to
+    cross-reference a *different* proposal; the triggering one is already in the
+    user message.
+- `gh` (read-only GitHub CLI), `jq`, and the `nf-core` CLI. For module /
+  subworkflow overlap you may also use `nf-core modules info <tool>`,
+  `nf-core modules list remote`, and `nf-core subworkflows list remote`, which
+  query the canonical registry directly.
 
-## Step 1: Fetch the proposal(s)
+Write operations and any other binaries are blocked.
 
-Accept issue number, URL, pasted text, or just a name ("review the shallowseq
-proposal").
+## Step 1: Tool inventory, then pipeline overlap
 
-```bash
-bash <skill-dir>/scripts/fetch_proposal.sh [NUMBER]
-# omit NUMBER to list all open proposals
-```
+Pull the proposed tool list, purpose, data type, organism scope, and proposer
+handle from the provided proposal. Then: check tools → check if they're already
+in nf-core → check which pipelines use them → decide.
 
-Extract from the proposal:
-
-- Proposed pipeline name
-- Stated purpose and analysis type
-- Target data type and organism scope (is it organism-specific?)
-- Proposed tool list
-- Proposer's GitHub handle
-
-## Step 2: Tool inventory first, then pipeline overlap
-
-**check tools → check if they're already in nf-core → check which pipelines use
-them → decide**.
-
-### 2a–2b. Tool inventory
+### Tool inventory
 
 ```bash
 bash <skill-dir>/scripts/check_tools.sh <tool1> [tool2 ...]
@@ -57,7 +60,7 @@ For each tool this checks nf-core/modules presence and which pipeline `main.nf`
 files reference it. If several proposed tools are already used together in an
 existing pipeline, that's a strong overlap signal.
 
-### 2c. Map tool overlap to a verdict hint
+Map the overlap pattern to a scoring hint:
 
 | Tool overlap pattern                                              | What it suggests                                                  |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -66,7 +69,7 @@ existing pipeline, that's a strong overlap signal.
 | Tools not yet in nf-core + genuinely novel combination            | New pipeline more justified                                       |
 | Standard tools + one novel algorithm                              | New pipeline only if the novel algorithm is the load-bearing part |
 
-### 2d. Check existing pipelines directly
+### Check existing pipelines directly
 
 ```bash
 bash <skill-dir>/scripts/list_pipelines.sh
@@ -78,17 +81,21 @@ Look specifically for:
 - Pipelines using overlapping tool sets even if differently framed
 - Archived pipelines that cover the space (may be revivable)
 
-## Step 3: Apply the four criteria
+When you find a strong overlap, look up that pipeline's maintainers' GitHub
+usernames now — you'll need them for the report and draft comment. See "Find and
+name the overlapping pipeline's maintainers" in the pitfalls section.
+
+## Step 2: Apply the four criteria
 
 Evaluate each and note your evidence — a short phrase is fine, you don't need
 prose.
 
-### A. Workflow Specificity (primary gate)
+### A. Workflow specificity (primary gate)
 
 The nf-core requirement at
 https://nf-co.re/docs/specifications/pipelines/requirements/workflow_specificity:
 
-- One pipeline per data+analysis type
+- One pipeline per data + analysis type
 - No organism-specific pipelines unless the tooling genuinely can't generalise
 - Prefer extending an existing pipeline over creating a new one
 
@@ -111,7 +118,8 @@ different algorithms" does.
 ### C. Novelty — what's the genuine gap?
 
 - What does this bring that nothing in nf-core currently covers?
-- Is the novel part a whole pipeline worth, or one or two modules/subworkflows?
+- Is the novel part a whole pipeline's worth, or one or two
+  modules/subworkflows?
 - Is there a published method being implemented, or is it "standard tools run in
   order"?
 
@@ -128,56 +136,88 @@ subworkflow to an existing pipeline, that's probably the right path.
   This is a risk factor, not a hard reject, but it should prompt a "do you have
   collaborators?" question before approval.
 
-## Step 4: Classify the verdict
+## Step 3: Score the proposal
 
-| Verdict                | When to use                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **CLEAR_REJECT**       | Fails workflow_specificity with no salvage path, OR untestable in CI                                                |
-| **CONDITIONAL_ACCEPT** | Novel gap, passes specificity, conditions are not blockers                                                          |
-| **REJECT_SALVAGEABLE** | Fails as proposed (usually specificity) but has a genuine novel component worth steering toward a different framing |
-| **BORDERLINE**         | Passes hard criteria but has real sustainability or scope risk; needs a conversation before approval                |
-| **NEEDS_MORE_INFO**    | Can't assess without a specific answer from the proposer; include the question                                      |
+Give an **overall score out of 5**, plus a score out of 5 for each of the four
+criteria. The score is advice for the maintainer team — it is not a decision, and
+you never "accept" or "reject" anything yourself.
 
-## Step 5: Produce the review
+| Overall | Emoji | Meaning                                                                                |
+| ------- | ----- | -------------------------------------------------------------------------------------- |
+| 5/5     | 🟢    | Strong fit — clear novel gap, passes specificity, testable, sustainable                |
+| 4/5     | 🟢    | Good fit — minor conditions, no blockers                                               |
+| 3/5     | 🟡    | Borderline — real merit but notable scope or sustainability concerns; needs discussion |
+| 2/5     | 🔴    | Weak fit — significant overlap or specificity problems; salvageable only by reframing  |
+| 1/5     | 🔴    | Poor fit — fails specificity with no salvage path, or untestable in CI                 |
 
-### Verdict block
+If a criterion can't be assessed without an answer from the proposer, score it
+`—/5` and state the question rather than guessing.
 
-```
-PROPOSAL: #NNN <pipeline-name>
-VERDICT: <CATEGORY>
-NOVELTY: <what's genuinely new, or "none identified">
-OVERLAP: <most relevant existing pipelines>
-SPECIFICITY: PASS / FAIL / PARTIAL — <one line of evidence>
-TESTABILITY: PASS / FAIL — <one line of evidence>
-SUSTAINABILITY: LOW / MEDIUM / HIGH — <one line of evidence>
-```
+## Step 4: Produce the Slack message
 
-### Analysis narrative (2-4 paragraphs)
+Your entire response is rendered verbatim in a Slack Markdown block. Standard
+Markdown renders natively: `**bold**`, `-` bullets with two-space nested
+indentation, `[text](url)` links, and code blocks.
 
-1. What the proposal is actually doing in plain terms (your synthesis, not a
-   quote)
-2. How it compares to the most relevant existing pipelines
-3. The strongest argument for acceptance
-4. The strongest argument for rejection or steering
+- **No preamble, no meta-commentary.** Start directly with the overall-score
+  line. Never write "Here is the review", "I have enough to…", or similar, and do
+  not add `---` separators or a top-level heading. The bot's wrapper supplies the
+  title, the `@core-team` tag, and the automated/non-binding disclaimer above your
+  body — do not write your own disclaimer.
+- **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
+  under ~1500 characters. Short bullets, not paragraphs. Cut anything a
+  maintainer doesn't need to decide.
+- **Do not wrap the message in a code block.** The only code block in your output
+  is the draft GitHub comment at the end.
 
-### Conditions / Steering (if CONDITIONAL_ACCEPT or REJECT_SALVAGEABLE)
+Emoji key: 🟢 strong (score 4–5/5), 🟡 mixed (3/5), 🔴 weak (1–2/5); for the
+bar-style criteria ✅ bar met, ⚠️ partial, ❌ not met. Every score is `N/5`.
 
-Distinguish clearly:
+Follow this structure (these lines are the literal Markdown to emit, minus this
+surrounding explanation):
 
-- **Blockers** — must resolve before /approve
-- **Conditions** — should address, not hard blockers
-- **Suggestions** — helpful but optional
+> **Overall: 🟡 3/5**
+>
+> - **Novelty:** 🟢 4/5 — one line, or "none identified"
+> - **Overlap:** most relevant existing pipeline(s), one line
+> - **Specificity:** ❌ 2/5 — ≤8 words
+> - **Testability:** ✅ 5/5 — ≤8 words
+> - **Sustainability:** 🔴 2/5 — ≤8 words
+>
+> **Why**
+>
+> - 2–3 short bullets: what it does, the gap it fills, the main risk.
+>
+> **Suggested reviewers** (whenever there's pipeline overlap — see the pitfalls
+> section for how to find them)
+>
+> - up to three `@username` handles — the people who actually drive <overlapping
+>   pipeline>; worth pinging on GitHub and in the relevant Slack channel.
+>
+> **Blockers / conditions** (only if relevant)
+>
+> - one-line bullets; nest sub-points with two-space indentation if needed.
+>   Distinguish blockers (would need resolving before the proposal could be
+>   accepted) from softer conditions and optional suggestions.
 
-### Draft GitHub comment
+Then add the **draft GitHub comment** as the final element, wrapped in a single
+triple-backtick code block so a maintainer can copy it. Inside that block:
 
-A ready-to-post comment. Conventions:
-
-- Use `/approve` or `/reject` per nf-core convention (two `/reject` comments =
-  rejection)
-- Tone: direct and constructive, not corporate. Match the formality level of the
+- Write GitHub-flavoured Markdown, keep it under ~150 words.
+- **Do not hard-wrap** — put each paragraph and each bullet on ONE line with a
+  blank line between paragraphs. A stray mid-paragraph newline renders as a
+  `<br>` on GitHub.
+- **Never write `/approve` or `/reject` yourself.** Those commands are the
+  maintainers' decision, not the bot's. Write the comment as an assessment a
+  maintainer can post; they add the command if they agree.
+- Tone: direct and constructive, not corporate. Match the formality of the
   existing thread.
-- If rejecting, offer a concrete path forward where one exists
-- Keep it under 300 words — maintainers' time is scarce
+- If the scores point to a poor fit, offer a concrete path forward where one
+  exists (a subworkflow PR to an adjacent pipeline, a SIG consultation, etc.).
+- If there's pipeline overlap, @-mention the maintainers you found (same handles
+  as the Slack **Suggested reviewers** line) so they're looped into the thread.
+- If you're not familiar with the domain, say so — flagging an apparent overlap
+  from a non-expert perspective is still valuable.
 
 ## Common patterns and pitfalls
 
@@ -232,80 +272,37 @@ will otherwise ask whether a plugin would suffice.
 feedback round. This affects the realistic approval timeline and can justify a
 softer close.
 
-**When you're not domain-familiar**: Say so explicitly in the comment. A
-maintainer who knows the area will weigh in, but flagging "this looks like it
-overlaps with sarek's preprocessing based on the tool list" from a non-expert
-perspective is still valuable.
+**Find and name the overlapping pipeline's maintainers**: When the proposal
+overlaps an existing pipeline, don't just say "ping the leads" — actually look up
+their GitHub usernames and put them in both the Slack **Suggested reviewers**
+line and the draft GitHub comment so they can be @-mentioned.
 
-**Ping the relevant pipeline leads**: If the proposal overlaps with an existing
-pipeline, directly ping the leads of that pipeline on GitHub and in the relevant
-Slack channel. This is often more effective than waiting for them to find the
-proposal thread.
+**Tag at most three people, and only the ones who genuinely drive the pipeline.**
+Every nf-core pipeline has a small core of heavy contributors plus a long tail of
+people with one or two commits — the long tail must NOT be tagged. Start from the
+designated code owners, which is exactly this short list:
 
----
+```bash
+gh api -H "Accept: application/vnd.github.raw" repos/nf-core/<pipeline>/contents/.github/CODEOWNERS
+```
 
-## Runtime addendum (nf-core-bot / Slack + Bedrock)
+If there's no `CODEOWNERS`, rank contributors by contribution count and keep only
+the clear leaders — drop anyone whose count is a small fraction of the top
+contributor's:
 
-This section is appended for the automated Slack-bot context and is NOT part of
-the upstream skill. It tunes the skill for where the review runs and is posted.
+```bash
+gh api 'repos/nf-core/<pipeline>/contributors?per_page=100' --jq 'sort_by(-.contributions) | .[:10] | map({login, contributions})'
+```
 
-**Tooling.** You have one tool, `run_command`, a read-only command runner.
-Through it you can run:
+For an older pipeline whose original authors have moved on, prefer whoever is
+actually active now — cross-check recent committers and favour them:
 
-- the bundled scripts above: `bash <skill-dir>/scripts/fetch_proposal.sh`,
-  `bash <skill-dir>/scripts/check_tools.sh <tools…>`,
-  `bash <skill-dir>/scripts/list_pipelines.sh` (use the exact `<skill-dir>`
-  absolute path given in this prompt);
-- `gh` (read-only GitHub CLI), `jq`, and the `nf-core` CLI. For module /
-  subworkflow overlap you may also use `nf-core modules info <tool>` /
-  `nf-core modules list remote` / `nf-core subworkflows list remote`, which
-  query the canonical registry directly. Write operations and any other binaries
-  are blocked.
+```bash
+gh api 'repos/nf-core/<pipeline>/commits?per_page=100' --jq '[.[].author.login] | group_by(.) | map({login: .[0], n: length}) | sort_by(-.n)'
+```
 
-**The proposal is already provided.** The triggering issue's body and every
-comment are included in the user message, so you can skip Step 1's
-`fetch_proposal.sh` for the issue itself and start at Step 2 (tool/pipeline
-overlap). Use `fetch_proposal.sh` only if you need to cross-reference another
-proposal.
-
-**Output format — ONE short message in standard Markdown.** These rules OVERRIDE
-the formatting in Step 5. Your entire response is rendered verbatim in a Slack
-Markdown block (standard Markdown: `**bold**`, `-` bullets with nested
-indentation, `[text](url)` links, code blocks all render natively). So:
-
-- **No preamble, no meta-commentary.** Never write "Here is the review", "I have
-  enough to…", or similar. Start directly with the verdict line. Do not add `---`
-  separators or a top-level heading (the bot adds the title).
-- **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
-  under ~1500 characters. Short bullets, not paragraphs. Cut anything a
-  maintainer doesn't need to decide.
-- Use `-` for bullets and indent two spaces for a nested sub-bullet. Use
-  `**bold**` for the labels below.
-
-Output the message directly as Markdown — do **NOT** wrap the whole message in a
-code block. The ONLY code block in your output is the draft GitHub comment at the
-end. Emoji key: ✅ pass/accept, ⚠️ partial/borderline, ❌ fail/reject; 🟢/🟡/🔴 =
-low/med/high risk. Follow this structure (these lines are the literal Markdown to
-emit, minus this surrounding explanation):
-
-> **Verdict: ✅ CONDITIONAL_ACCEPT**
->
-> - **Novelty:** one line, or "none identified"
-> - **Overlap:** most relevant existing pipeline(s), one line
-> - **Specificity:** ✅ PASS — ≤8 words
-> - **Testability:** ⚠️ PARTIAL — ≤8 words
-> - **Sustainability:** 🔴 LOW — ≤8 words
->
-> **Why**
->
-> - 2–3 short bullets: what it does, the gap it fills, the main risk.
->
-> **Blockers / conditions** (only if relevant)
->
-> - one-line bullets; nest sub-points with two-space indentation if needed.
-
-Then add the **draft GitHub comment** as the final element, wrapped in a single
-triple-backtick code block so a maintainer can copy it. Inside that block write
-_GitHub_-flavoured Markdown, keep it under ~150 words, and **do not hard-wrap**:
-put each paragraph and each bullet on ONE line with a blank line between
-paragraphs — a stray mid-paragraph newline renders as a `<br>` on GitHub.
+List the resulting **one to three** `@username` handles (comma-separated) and
+suggest pinging them on GitHub and in the relevant Slack channel — far more
+effective than waiting for them to find the proposal thread. If you genuinely
+can't resolve a handle, name the pipeline and say its maintainers should be
+looped in rather than inventing or over-tagging.
