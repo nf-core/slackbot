@@ -10,6 +10,7 @@ from nf_core_bot.checks.slack_profile import (
     _resolve_github_field_id,
     get_github_username,
     normalise_github_username,
+    set_github_username,
 )
 
 # ── normalise_github_username ────────────────────────────────────────
@@ -294,3 +295,100 @@ class TestGetGithubUsername:
 
         result = await get_github_username(client, "U_TARGET")
         assert result is None
+
+
+# ── set_github_username ──────────────────────────────────────────────
+
+
+class TestSetGithubUsername:
+    """Tests for the profile write-back (admin user-token path)."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self):  # type: ignore[no-untyped-def]
+        import nf_core_bot.checks.slack_profile as mod
+
+        mod._github_field_id = None
+        mod._github_field_resolved = False
+        mod._github_field_lock = None
+        mod._admin_client = None
+        mod._admin_client_resolved = False
+        yield
+        # Don't leak the mocked admin client into other test modules.
+        mod._admin_client = None
+        mod._admin_client_resolved = False
+
+    def _bot_client(self, existing_value: str = "") -> AsyncMock:
+        """A bot client that resolves the field ID and reports *existing_value*."""
+        client = AsyncMock()
+        client.api_call.return_value = {"profile": {"fields": [{"id": "Xf123", "label": "GitHub"}]}}
+        client.users_profile_get.return_value = {"profile": {"fields": {"Xf123": {"value": existing_value}}}}
+        return client
+
+    async def test_writes_bare_handle_when_field_empty(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        admin = AsyncMock()
+        mod._admin_client = admin
+        mod._admin_client_resolved = True
+
+        result = await set_github_username(self._bot_client(), "U_TARGET", "octocat")
+
+        assert result is True
+        admin.users_profile_set.assert_awaited_once_with(
+            user="U_TARGET",
+            profile={"fields": {"Xf123": {"value": "octocat", "alt": ""}}},
+        )
+
+    async def test_skips_when_field_already_set(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        admin = AsyncMock()
+        mod._admin_client = admin
+        mod._admin_client_resolved = True
+
+        # Profile already has a handle — never clobber it.
+        result = await set_github_username(self._bot_client("existinguser"), "U_TARGET", "octocat")
+
+        assert result is False
+        admin.users_profile_set.assert_not_awaited()
+
+    async def test_noop_when_admin_token_unconfigured(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        # No admin token → _get_admin_client() yields None.
+        mod._admin_client = None
+        mod._admin_client_resolved = True
+
+        client = self._bot_client()
+        result = await set_github_username(client, "U_TARGET", "octocat")
+
+        assert result is False
+        # Should bail before touching the field/profile at all.
+        client.api_call.assert_not_awaited()
+
+    async def test_returns_false_when_no_field_id(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        admin = AsyncMock()
+        mod._admin_client = admin
+        mod._admin_client_resolved = True
+
+        client = AsyncMock()
+        client.api_call.return_value = {"profile": {"fields": []}}  # no GitHub field
+
+        result = await set_github_username(client, "U_TARGET", "octocat")
+
+        assert result is False
+        admin.users_profile_set.assert_not_awaited()
+
+    async def test_never_raises_on_api_error(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        admin = AsyncMock()
+        admin.users_profile_set.side_effect = RuntimeError("permission denied")
+        mod._admin_client = admin
+        mod._admin_client_resolved = True
+
+        result = await set_github_username(self._bot_client(), "U_TARGET", "octocat")
+
+        assert result is False

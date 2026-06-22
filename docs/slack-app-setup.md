@@ -45,6 +45,32 @@ new scopes to take effect (see [Install the App](#install-the-app) below). The
 bot token (`xoxb-…`) does not rotate on reinstall, so no environment-variable
 change is needed.
 
+### Optional: user token for profile write-back
+
+To have the bot write a member's GitHub username into their Slack profile after
+an org invite, the app also needs a **user token** (`xoxp-…`) — a bot token
+cannot edit another member's profile.
+
+1. On the same **OAuth & Permissions** page, scroll to **Scopes** > **User Token
+   Scopes** (the section _below_ Bot Token Scopes) and add:
+
+   | Scope                 | Purpose                                                  |
+   | --------------------- | -------------------------------------------------------- |
+   | `users.profile:write` | Write members' GitHub usernames into their Slack profile |
+
+2. **Reinstall the app as a Workspace Admin or Owner.** The user token inherits
+   the installing person's role, and Slack only lets an Admin/Owner-generated
+   token edit other members' profiles (and only members ranked _below_ the
+   installer — writes targeting fellow admins/owners will fail, which the bot
+   tolerates gracefully). The workspace must be on a **paid plan**.
+
+3. After authorising, the **User OAuth Token** (`xoxp-…`) appears at the top of
+   the OAuth & Permissions page, above the bot token. Set it as
+   `SLACK_ADMIN_USER_TOKEN`.
+
+This token is optional — leave `SLACK_ADMIN_USER_TOKEN` unset and the write-back
+silently no-ops; everything else works unchanged.
+
 If `#core` is a public channel in your workspace, swap `groups:read` →
 `channels:read` and `groups:write.topic` → `channels:manage` (or the granular
 `channels:write.topic`).
@@ -111,6 +137,13 @@ After setup you should have three credentials:
 | `SLACK_BOT_TOKEN`      | `xoxb-`      | OAuth & Permissions > Bot User OAuth Token |
 | `SLACK_SIGNING_SECRET` | (hex string) | Basic Information > App Credentials        |
 | `SLACK_APP_TOKEN`      | `xapp-`      | Basic Information > App-Level Tokens       |
+
+Plus one optional credential for GitHub profile write-back (see
+[Optional: user token for profile write-back](#optional-user-token-for-profile-write-back)):
+
+| Variable                 | Starts with | Where                                  |
+| ------------------------ | ----------- | -------------------------------------- |
+| `SLACK_ADMIN_USER_TOKEN` | `xoxp-`     | OAuth & Permissions > User OAuth Token |
 
 Put these in your `.env` file (see `.env.example` in the repo root) or in SSM
 Parameter Store for production (see [Deployment](deployment.md)).

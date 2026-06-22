@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nf_core_bot.checks.github import add_to_team, check_org_membership, check_user_exists, invite_to_org
+from nf_core_bot.checks.slack_profile import set_github_username
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -149,6 +150,12 @@ async def invite_and_greet(
         "or click on this link to accept: https://github.com/orgs/nf-core/invitation"
     )
     await _safe_reply(reply, msg)
+
+    # Back-fill the invitee's Slack profile with their GitHub handle so it's
+    # there permanently. Best-effort and skip-if-already-set, so it's a no-op
+    # on paths where the handle came from the profile in the first place.
+    if greeting_user_id is not None:
+        await set_github_username(client, greeting_user_id, github_username)
 
     # Always DM the caller as a failsafe confirmation
     dm_text = (
