@@ -151,9 +151,9 @@ async def invite_and_greet(
     )
     await _safe_reply(reply, msg)
 
-    # Back-fill the invitee's Slack profile with their GitHub handle so it's
-    # there permanently. Best-effort and skip-if-already-set, so it's a no-op
-    # on paths where the handle came from the profile in the first place.
+    # Populate the invitee's "GitHub (auto)" profile field with the handle they
+    # were invited with, so it shows on their Slack profile. Best-effort and
+    # idempotent (skips if the auto field is already set); never blocks the invite.
     if greeting_user_id is not None:
         await set_github_username(client, greeting_user_id, github_username)
 

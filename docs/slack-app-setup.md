@@ -47,16 +47,18 @@ change is needed.
 
 ### Optional: user token for profile write-back
 
-To have the bot write a member's GitHub username into their Slack profile after
+To have the bot populate a member's GitHub handle into their Slack profile after
 an org invite, the app also needs a **user token** (`xoxp-…`) — a bot token
-cannot edit another member's profile.
+cannot edit another member's profile. This also requires the dedicated
+`GitHub (auto)` profile field described in
+[GitHub Profile Fields](#github-profile-fields) below.
 
 1. On the same **OAuth & Permissions** page, scroll to **Scopes** > **User Token
    Scopes** (the section _below_ Bot Token Scopes) and add:
 
-   | Scope                 | Purpose                                                  |
-   | --------------------- | -------------------------------------------------------- |
-   | `users.profile:write` | Write members' GitHub usernames into their Slack profile |
+   | Scope                 | Purpose                                               |
+   | --------------------- | ----------------------------------------------------- |
+   | `users.profile:write` | Write members' GitHub handles into the `(auto)` field |
 
 2. **Reinstall the app as a Workspace Admin or Owner.** The user token inherits
    the installing person's role, and Slack only lets an Admin/Owner-generated
@@ -148,15 +150,26 @@ Plus one optional credential for GitHub profile write-back (see
 Put these in your `.env` file (see `.env.example` in the repo root) or in SSM
 Parameter Store for production (see [Deployment](deployment.md)).
 
-## GitHub Profile Field
+## GitHub Profile Fields
 
-The bot reads GitHub usernames from a **custom profile field** in Slack. Most
-nf-core workspaces already have this configured. If your workspace doesn't:
+The bot uses **two** custom profile fields, both discovered automatically from
+`team.profile.get` by their labels:
 
-1. Go to your Slack workspace **Settings & Administration** > **Profile**
-2. Add a custom text field with a label containing the word "GitHub" (e.g.
-   "GitHub Username")
-3. Members can then fill in their GitHub username in their Slack profile
+| Field         | Label contains       | Data source      | Used for                                                        |
+| ------------- | -------------------- | ---------------- | --------------------------------------------------------------- |
+| Member GitHub | `github` (no "auto") | Members can edit | The bot **reads** this to look up a member's handle             |
+| Auto GitHub   | `github` + `auto`    | **API**          | The bot **writes** invited handles here, as a link, for display |
 
-The bot discovers this field automatically by searching for a profile field with
-"github" in the label.
+If your workspace doesn't have these:
+
+1. Go to your Slack workspace **Settings & Administration** > **Configure
+   profiles** (or **Profile** on non-Enterprise plans).
+2. Add a text/link field labelled e.g. **"GitHub"** for members to self-fill.
+3. Add a **link** field labelled **"GitHub (auto)"** and set its **Data source**
+   to **API**. This is mandatory for the write-back: with any other data source,
+   `users.profile.set` returns `ok` but **silently discards the write**. Setting
+   the data source to API also makes the field read-only for members (the bot
+   owns it).
+
+The write-back stores the GitHub URL as the field value and `@handle` as the
+display text, and only writes when the auto field is empty (idempotent).
