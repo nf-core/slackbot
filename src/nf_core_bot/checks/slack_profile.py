@@ -12,18 +12,29 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from slack_sdk.web.async_client import AsyncWebClient
 
 from nf_core_bot import config
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = logging.getLogger(__name__)
 
-# ── GitHub profile field ID cache ────────────────────────────────────
+# ── GitHub profile field IDs ─────────────────────────────────────────
+# The workspace has two GitHub custom fields:
+#   "GitHub"        — member-editable; the bot READS it to look up handles.
+#   "GitHub (auto)" — API data source (members can't edit it); the bot WRITES
+#                     invited handles here, as a link, for display. Writes only
+#                     work because this field's Data source is set to "API" in
+#                     the Slack "Configure profiles" admin tool.
 
 _github_field_id: str | None = None
 _github_field_resolved: bool = False
+_github_auto_field_id: str | None = None
+_github_auto_field_resolved: bool = False
 _github_field_lock: asyncio.Lock | None = None
 
 
@@ -39,11 +50,25 @@ def _get_github_field_lock() -> asyncio.Lock:
     return _github_field_lock
 
 
-async def _resolve_github_field_id(client: AsyncWebClient) -> str | None:
-    """Discover the custom profile field ID for the GitHub username.
+async def _fetch_field_id(client: AsyncWebClient, match: Callable[[str], bool]) -> str | None:
+    """Return the ID of the first custom profile field whose label matches.
 
-    Calls ``team.profile.get`` once and caches the result.  Returns ``None``
-    if no field with a GitHub-related label is found.
+    *match* receives the lower-cased field label.
+    """
+    resp = await client.api_call("team.profile.get")
+    profile_data: dict[str, Any] = resp.get("profile", {})
+    fields: list[dict[str, Any]] = profile_data.get("fields", [])
+    for field in fields:
+        if match((field.get("label") or "").lower()):
+            return str(field["id"])
+    return None
+
+
+async def _resolve_github_field_id(client: AsyncWebClient) -> str | None:
+    """Discover the ID of the member-editable "GitHub" field (for reads).
+
+    Matches a GitHub-labelled field but excludes the "(auto)" write field.
+    Calls ``team.profile.get`` once and caches the result.
 
     An async lock ensures concurrent callers don't fire redundant API calls.
     """
@@ -53,34 +78,61 @@ async def _resolve_github_field_id(client: AsyncWebClient) -> str | None:
         return _github_field_id
 
     async with _get_github_field_lock():
-        # Double-check after acquiring the lock — another coroutine may
-        # have resolved it while we were waiting.
-        if _github_field_resolved:
+        if _github_field_resolved:  # double-check after acquiring the lock
             return _github_field_id
-
         try:
-            resp = await client.api_call("team.profile.get")
-            profile_data: dict[str, Any] = resp.get("profile", {})
-            fields: list[dict[str, Any]] = profile_data.get("fields", [])
-            for field in fields:
-                label = (field.get("label") or "").lower()
-                if "github" in label:
-                    _github_field_id = field["id"]
-                    logger.info(
-                        "Resolved GitHub profile field: id=%s label=%r",
-                        _github_field_id,
-                        field.get("label"),
-                    )
-                    break
+            _github_field_id = await _fetch_field_id(client, lambda lbl: "github" in lbl and "auto" not in lbl)
+            if _github_field_id is None:
+                logger.warning("No member GitHub custom profile field found in workspace.")
             else:
-                logger.warning("No GitHub custom profile field found in workspace.")
+                logger.info("Resolved member GitHub profile field: id=%s", _github_field_id)
             # Only cache when the API call succeeded — a transient failure
-            # should not permanently disable GitHub username resolution.
+            # should not permanently disable resolution.
             _github_field_resolved = True
         except Exception:
             logger.exception("Failed to call team.profile.get — will retry on next call")
 
     return _github_field_id
+
+
+async def _resolve_github_auto_field_id(client: AsyncWebClient) -> str | None:
+    """Discover the ID of the API-managed "GitHub (auto)" field (for writes).
+
+    Returns ``None`` if no such field exists — in which case the write-back is
+    disabled (the field must be created with Data source = API in Slack admin).
+    """
+    global _github_auto_field_id, _github_auto_field_resolved  # noqa: PLW0603
+
+    if _github_auto_field_resolved:
+        return _github_auto_field_id
+
+    async with _get_github_field_lock():
+        if _github_auto_field_resolved:  # double-check after acquiring the lock
+            return _github_auto_field_id
+        try:
+            _github_auto_field_id = await _fetch_field_id(client, lambda lbl: "github" in lbl and "auto" in lbl)
+            if _github_auto_field_id is None:
+                logger.warning("No 'GitHub (auto)' profile field found — profile write-back disabled.")
+            else:
+                logger.info("Resolved GitHub (auto) profile field: id=%s", _github_auto_field_id)
+            _github_auto_field_resolved = True
+        except Exception:
+            logger.exception("Failed to call team.profile.get — will retry on next call")
+
+    return _github_auto_field_id
+
+
+async def _read_field_value(client: AsyncWebClient, user_id: str, field_id: str) -> str:
+    """Return the raw value of *field_id* in *user_id*'s profile (``""`` if unset)."""
+    try:
+        resp = await client.users_profile_get(user=user_id)
+        profile: dict[str, Any] = resp.get("profile", {})
+        fields: dict[str, Any] = profile.get("fields", {}) or {}
+        field_data = fields.get(field_id, {})
+        return (field_data.get("value") or "").strip()
+    except Exception:
+        logger.exception("Failed to read profile field for user %s", user_id)
+        return ""
 
 
 async def get_github_username(client: AsyncWebClient, user_id: str) -> str | None:
@@ -134,39 +186,43 @@ def _get_admin_client() -> AsyncWebClient | None:
     return _admin_client
 
 
-async def set_github_username(client: AsyncWebClient, user_id: str, value: str) -> bool:
-    """Write *value* into *user_id*'s GitHub profile field. Best-effort.
+async def set_github_username(client: AsyncWebClient, user_id: str, handle: str) -> bool:
+    """Write *handle* into *user_id*'s "GitHub (auto)" profile field. Best-effort.
 
-    *client* is the bot client, used only to resolve (and cache) the custom
-    field ID — that lookup needs just ``users.profile:read``. The write itself
-    goes through the admin user-token client (``users.profile:write``).
+    *client* is the bot client, used to resolve field IDs and read current
+    values (needs ``users.profile:read``). The write itself goes through the
+    admin user-token client (``users.profile:write``); the target field must
+    have its Data source set to "API" or Slack silently no-ops the write.
 
-    Skips — returning ``False`` — when the admin token is unconfigured, the
-    field can't be resolved, or the user already has a value set (we never
-    clobber a handle the member entered themselves). Never raises: any API
-    failure is logged and reported as ``False``.
+    The field is a *link* type, so we store the GitHub URL as the value and the
+    ``@``-prefixed handle as the display text.
+
+    Skips — returning ``False`` — when: the admin token is unconfigured, the
+    "(auto)" field doesn't exist, or the auto field is already set (idempotent
+    re-runs). Never raises: any failure is logged and returns ``False``.
     """
     admin = _get_admin_client()
     if admin is None:
         return False
 
-    field_id = await _resolve_github_field_id(client)
-    if field_id is None:
+    auto_field_id = await _resolve_github_auto_field_id(client)
+    if auto_field_id is None:
         return False
 
-    # Don't overwrite an existing handle — a member's own entry wins, and a
-    # mismatch with the invited handle is signal worth preserving, not noise.
-    if await get_github_username(client, user_id) is not None:
+    # Idempotent: skip if the auto field is already populated.
+    if await _read_field_value(client, user_id, auto_field_id):
         return False
 
+    url = f"https://github.com/{handle}"
     try:
-        # Custom fields must be set via the ``profile`` argument (the
-        # name/value form only works for standard fields like first_name).
-        await admin.users_profile_set(user=user_id, profile={"fields": {field_id: {"value": value, "alt": ""}}})
-        logger.info("Wrote GitHub username %r to profile of user %s", value, user_id)
+        await admin.users_profile_set(
+            user=user_id,
+            profile={"fields": {auto_field_id: {"value": url, "alt": f"@{handle}"}}},
+        )
+        logger.info("Wrote GitHub handle %r to auto profile field of user %s", handle, user_id)
         return True
     except Exception:
-        logger.exception("Failed to write GitHub username to profile of user %s", user_id)
+        logger.exception("Failed to write GitHub handle to profile of user %s", user_id)
         return False
 
 

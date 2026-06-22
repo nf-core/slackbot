@@ -301,7 +301,7 @@ class TestGetGithubUsername:
 
 
 class TestSetGithubUsername:
-    """Tests for the profile write-back (admin user-token path)."""
+    """Tests for the profile write-back into the API-managed "GitHub (auto)" field."""
 
     @pytest.fixture(autouse=True)
     def _reset_cache(self):  # type: ignore[no-untyped-def]
@@ -309,6 +309,8 @@ class TestSetGithubUsername:
 
         mod._github_field_id = None
         mod._github_field_resolved = False
+        mod._github_auto_field_id = None
+        mod._github_auto_field_resolved = False
         mod._github_field_lock = None
         mod._admin_client = None
         mod._admin_client_resolved = False
@@ -317,14 +319,19 @@ class TestSetGithubUsername:
         mod._admin_client = None
         mod._admin_client_resolved = False
 
-    def _bot_client(self, existing_value: str = "") -> AsyncMock:
-        """A bot client that resolves the field ID and reports *existing_value*."""
+    def _bot_client(self, *, member_value: str = "", auto_value: str = "", auto_field: bool = True) -> AsyncMock:
+        """A bot client exposing the member "GitHub" field and (optionally) "GitHub (auto)"."""
+        fields = [{"id": "XfMEMBER", "label": "GitHub"}]
+        if auto_field:
+            fields.append({"id": "XfAUTO", "label": "GitHub (auto)"})
         client = AsyncMock()
-        client.api_call.return_value = {"profile": {"fields": [{"id": "Xf123", "label": "GitHub"}]}}
-        client.users_profile_get.return_value = {"profile": {"fields": {"Xf123": {"value": existing_value}}}}
+        client.api_call.return_value = {"profile": {"fields": fields}}
+        client.users_profile_get.return_value = {
+            "profile": {"fields": {"XfMEMBER": {"value": member_value}, "XfAUTO": {"value": auto_value}}}
+        }
         return client
 
-    async def test_writes_bare_handle_when_field_empty(self) -> None:
+    async def test_writes_url_to_auto_field_when_empty(self) -> None:
         import nf_core_bot.checks.slack_profile as mod
 
         admin = AsyncMock()
@@ -336,18 +343,35 @@ class TestSetGithubUsername:
         assert result is True
         admin.users_profile_set.assert_awaited_once_with(
             user="U_TARGET",
-            profile={"fields": {"Xf123": {"value": "octocat", "alt": ""}}},
+            profile={"fields": {"XfAUTO": {"value": "https://github.com/octocat", "alt": "@octocat"}}},
         )
 
-    async def test_skips_when_field_already_set(self) -> None:
+    async def test_writes_even_when_member_field_already_set(self) -> None:
         import nf_core_bot.checks.slack_profile as mod
 
         admin = AsyncMock()
         mod._admin_client = admin
         mod._admin_client_resolved = True
 
-        # Profile already has a handle — never clobber it.
-        result = await set_github_username(self._bot_client("existinguser"), "U_TARGET", "octocat")
+        # The auto field is populated for everyone, regardless of whether the
+        # member self-filled the editable field.
+        result = await set_github_username(self._bot_client(member_value="existinguser"), "U_TARGET", "octocat")
+
+        assert result is True
+        admin.users_profile_set.assert_awaited_once_with(
+            user="U_TARGET",
+            profile={"fields": {"XfAUTO": {"value": "https://github.com/octocat", "alt": "@octocat"}}},
+        )
+
+    async def test_skips_when_auto_field_already_set(self) -> None:
+        import nf_core_bot.checks.slack_profile as mod
+
+        admin = AsyncMock()
+        mod._admin_client = admin
+        mod._admin_client_resolved = True
+
+        # Auto field already populated → idempotent skip.
+        result = await set_github_username(self._bot_client(auto_value="https://github.com/foo"), "U_TARGET", "octocat")
 
         assert result is False
         admin.users_profile_set.assert_not_awaited()
@@ -366,17 +390,15 @@ class TestSetGithubUsername:
         # Should bail before touching the field/profile at all.
         client.api_call.assert_not_awaited()
 
-    async def test_returns_false_when_no_field_id(self) -> None:
+    async def test_returns_false_when_no_auto_field(self) -> None:
         import nf_core_bot.checks.slack_profile as mod
 
         admin = AsyncMock()
         mod._admin_client = admin
         mod._admin_client_resolved = True
 
-        client = AsyncMock()
-        client.api_call.return_value = {"profile": {"fields": []}}  # no GitHub field
-
-        result = await set_github_username(client, "U_TARGET", "octocat")
+        # Only the member field exists — no "(auto)" field to write to.
+        result = await set_github_username(self._bot_client(auto_field=False), "U_TARGET", "octocat")
 
         assert result is False
         admin.users_profile_set.assert_not_awaited()
