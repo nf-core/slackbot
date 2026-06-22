@@ -371,9 +371,7 @@ class TestSetGithubUsername:
         mod._admin_client_resolved = True
 
         # Auto field already populated → idempotent skip.
-        result = await set_github_username(
-            self._bot_client(auto_value="https://github.com/foo"), "U_TARGET", "octocat"
-        )
+        result = await set_github_username(self._bot_client(auto_value="https://github.com/foo"), "U_TARGET", "octocat")
 
         assert result is False
         admin.users_profile_set.assert_not_awaited()
