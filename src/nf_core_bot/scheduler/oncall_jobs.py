@@ -29,6 +29,7 @@ from nf_core_bot.db.oncall import (
     update_roster_assignment,
 )
 from nf_core_bot.permissions.checks import refresh_core_team
+from nf_core_bot.proposals.slack_utils import resolve_channel_id
 
 if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient
@@ -54,19 +55,15 @@ TARGET_HOUR_UTC = 8
 # "(N more)" bullet is shown instead.
 MAX_PROPOSALS_PER_SECTION = 5
 
-# Fixed start-of-week reminder posted as the first thread reply under the
-# weekly on-call announcement.
-ONCALL_RESPONSIBILITIES = (
-    "*Start of week responsibilities to do now:*\n"
-    "- Check status and nudge ALL active proposals: https://github.com/nf-core/proposals\n"
-    "- Check stale requests in #release-review-trading and suggest swaps\n"
-    "\n"
-    "*Ongoing during the week:*\n"
-    "- Monitor #request-core\n"
-    "- Monitor #github-invitations\n"
-    "\n"
-    "Docs: https://nf-co.re/docs/community/governance/core-team#complete-on-call-duties"
-)
+# Channel names referenced in the start-of-week responsibilities reminder.
+# Rendered as clickable Slack channel links where the ID can be resolved.
+_RELEASE_REVIEW_CHANNEL = "release-review-trading"
+_REQUEST_CORE_CHANNEL = "request-core"
+_GITHUB_INVITATIONS_CHANNEL = "github-invitations"
+
+# Docs link posted as the final thread reply under the weekly on-call
+# announcement.
+ONCALL_DOCS = "Docs: https://nf-co.re/docs/community/governance/core-team#complete-on-call-duties"
 
 # Display heading for each proposal section, keyed by Proposal.section.
 # Each heading names the action the on-call person should take.
@@ -475,17 +472,44 @@ async def _send_channel_announcement(
     await sync_oncall_topic(client)
 
 
-async def _post_announcement_thread(client: AsyncWebClient, channel: str, thread_ts: str) -> None:
-    """Post the responsibilities reminder and proposals digest as thread replies.
+async def _channel_link(client: AsyncWebClient, name: str) -> str:
+    """Return a clickable ``<#ID>`` channel link, falling back to ``#name`` text."""
+    cid = await resolve_channel_id(client, name)
+    return f"<#{cid}>" if cid else f"#{name}"
 
-    Both replies are best-effort and independent: a failure posting one does
-    not prevent the other.
+
+async def _build_responsibilities(client: AsyncWebClient) -> str:
+    """Build the start-of-week responsibilities reminder.
+
+    Channel references are rendered as clickable Slack channel links where the
+    channel ID can be resolved; otherwise they fall back to plain ``#name`` text.
+    """
+    release_review = await _channel_link(client, _RELEASE_REVIEW_CHANNEL)
+    request_core = await _channel_link(client, _REQUEST_CORE_CHANNEL)
+    github_invitations = await _channel_link(client, _GITHUB_INVITATIONS_CHANNEL)
+    return (
+        "*Start of week responsibilities to do now:*\n"
+        "- Check status and nudge ALL active proposals: https://github.com/nf-core/proposals\n"
+        f"- Check stale requests in {release_review} and suggest swaps\n"
+        "\n"
+        "*Ongoing during the week:*\n"
+        f"- Monitor {request_core}\n"
+        f"- Monitor {github_invitations}"
+    )
+
+
+async def _post_announcement_thread(client: AsyncWebClient, channel: str, thread_ts: str) -> None:
+    """Post the responsibilities reminder, proposals digest, and docs link as thread replies.
+
+    All three replies are best-effort and independent: a failure posting one does
+    not prevent the others.
     """
     try:
+        responsibilities = await _build_responsibilities(client)
         await client.chat_postMessage(
             channel=channel,
             thread_ts=thread_ts,
-            text=ONCALL_RESPONSIBILITIES,
+            text=responsibilities,
         )
     except Exception:
         logger.exception("Failed to post on-call responsibilities thread reply")
@@ -501,6 +525,15 @@ async def _post_announcement_thread(client: AsyncWebClient, channel: str, thread
             )
     except Exception:
         logger.exception("Failed to post on-call proposals thread reply")
+
+    try:
+        await client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=ONCALL_DOCS,
+        )
+    except Exception:
+        logger.exception("Failed to post on-call docs thread reply")
 
 
 def _slack_link(url: str, text: str) -> str:
