@@ -218,10 +218,13 @@ class TestMaybeExtendRoster:
 
 
 class TestProcessReminders:
+    @patch("nf_core_bot.scheduler.oncall_jobs.resolve_channel_id", new_callable=AsyncMock, return_value="C_LINK")
     @patch("nf_core_bot.scheduler.oncall_jobs.list_open_proposals", new_callable=AsyncMock, return_value=[])
     @patch("nf_core_bot.scheduler.oncall_jobs._resolve_channel_id", new_callable=AsyncMock, return_value="C_CORE")
     @patch("nf_core_bot.scheduler.oncall_jobs.list_roster", new_callable=AsyncMock)
-    async def test_monday_announcement(self, mock_roster, _mock_ch, mock_proposals, ddb_table, client) -> None:
+    async def test_monday_announcement(
+        self, mock_roster, _mock_ch, mock_proposals, _mock_link, ddb_table, client
+    ) -> None:
         from nf_core_bot.checks.github import Proposal
         from nf_core_bot.db.oncall import get_reminder_tracking
         from nf_core_bot.scheduler.oncall_jobs import TARGET_HOUR_UTC, _process_reminders
@@ -253,12 +256,16 @@ class TestProcessReminders:
         assert len(announcements) == 1
         assert "<@U111>" in announcements[0].kwargs["text"]
 
-        # Two thread replies anchored to the announcement ts: responsibilities + proposals.
+        # Three thread replies anchored to the announcement ts:
+        # responsibilities + proposals + docs.
         replies = [c for c in channel_calls if c.kwargs.get("thread_ts") == "1700000000.000100"]
-        assert len(replies) == 2
+        assert len(replies) == 3
         assert "Start of week responsibilities" in replies[0].kwargs["text"]
+        # Channel references render as clickable <#ID> links.
+        assert "<#C_LINK>" in replies[0].kwargs["text"]
         assert "Open pipeline proposals" in replies[1].kwargs["text"]
         assert "issues/144|cfmultiomics" in replies[1].kwargs["text"]
+        assert "Docs:" in replies[2].kwargs["text"]
 
         # Tracking should be updated
         tracking = await get_reminder_tracking("2026-04-06")
