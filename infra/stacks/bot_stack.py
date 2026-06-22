@@ -128,6 +128,7 @@ class NfCoreBotStack(Stack):
             "SLACK_BOT_TOKEN",
             "SLACK_SIGNING_SECRET",
             "SLACK_APP_TOKEN",
+            "SLACK_ADMIN_USER_TOKEN",
             "GITHUB_TOKEN",
         ]
 

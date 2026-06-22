@@ -57,15 +57,29 @@ These steps only need to be done once when setting up the bot from scratch.
 
 ### 1. Store secrets in SSM Parameter Store
 
+Parameters live under the `/nf-core-bot/` path — this must match
+`ssm_secret_names` in `infra/stacks/bot_stack.py`, which is where the ECS task
+reads them from.
+
 ```bash
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
-  --name /nf-core/SLACK_BOT_TOKEN --type SecureString --value "xoxb-..."
+  --name /nf-core-bot/SLACK_BOT_TOKEN --type SecureString --value "xoxb-..."
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
-  --name /nf-core/SLACK_SIGNING_SECRET --type SecureString --value "..."
+  --name /nf-core-bot/SLACK_SIGNING_SECRET --type SecureString --value "..."
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
-  --name /nf-core/SLACK_APP_TOKEN --type SecureString --value "xapp-..."
+  --name /nf-core-bot/SLACK_APP_TOKEN --type SecureString --value "xapp-..."
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
-  --name /nf-core/GITHUB_TOKEN --type SecureString --value "github_pat_..."
+  --name /nf-core-bot/GITHUB_TOKEN --type SecureString --value "github_pat_..."
+```
+
+Optional — a Workspace Admin/Owner user token enables writing members' GitHub
+usernames into their Slack profiles after an org invite (see
+[Slack App Setup](slack-app-setup.md#optional-user-token-for-profile-write-back)).
+Omit it and the write-back simply no-ops:
+
+```bash
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SLACK_ADMIN_USER_TOKEN --type SecureString --value "xoxp-..."
 ```
 
 ### 2. Bootstrap CDK
