@@ -495,13 +495,43 @@ when the schedule changes.
 
 ---
 
+## Security Commands
+
+These commands surface GitHub security advisory data. All require `@core-team`
+Slack user group membership. See
+[security-advisories.md](security-advisories.md) for the daily automated digest
+that runs alongside these.
+
+### `security help`
+
+```
+/nf-core security help
+```
+
+Show security command help.
+
+### `security summary`
+
+```
+/nf-core security summary
+```
+
+Fetches live data from GitHub (not the cached digest state) and posts a summary
+of every open advisory (`triage`, `draft`, or `published` — excludes
+`closed`/`withdrawn`) across all nf-core repos, grouped by repo. Posted
+**visibly** in the conversation where you run it (channel or DM), not
+ephemerally, so anyone there can see the result. Falls back to DMing you if the
+bot can't post where the command was run (e.g. a channel it isn't a member of).
+
+---
+
 ## Permission Model
 
-| Level              | Who                                          | Access                                                                                 |
-| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites`               |
-| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                                    |
-| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *` |
+| Level              | Who                                          | Access                                                                                                        |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites`                                      |
+| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                                                           |
+| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *`, `/nf-core security *` |
 
 Admin membership is checked via `usergroups.users.list` and cached for 5
 minutes.

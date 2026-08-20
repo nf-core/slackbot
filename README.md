@@ -171,8 +171,9 @@ needed for creation or status changes.
 
 The bot polls GitHub once a day for new or changed security advisories
 (including Triage/draft reports) across every nf-core repo and posts them to a
-private Slack channel for the core team to review — see
-[docs/security-advisories.md](docs/security-advisories.md).
+private Slack channel for the core team to review. `@core-team` members can also
+run `/nf-core security summary` any time for an on-demand summary of all open
+advisories — see [docs/security-advisories.md](docs/security-advisories.md).
 
 ## Development
 

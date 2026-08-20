@@ -34,6 +34,14 @@ flowchart TD
 Runs as a background `asyncio.Task` launched from `app.py`, following the same
 pattern as the on-call scheduler (`scheduler/oncall_jobs.py`).
 
+## On-demand summary
+
+`/nf-core security summary` (`@core-team` only) fetches live data from GitHub
+and posts a summary of every currently-open advisory across all repos, grouped
+by repo — independent of the daily digest's new/changed diffing. Posted visibly
+wherever the command is run (channel or DM), not ephemerally. See
+[commands.md](commands.md#security-commands).
+
 ## Configuration (env vars)
 
 | Var                | Default         | Notes                                               |
@@ -69,3 +77,5 @@ belongs to.
   state (`ADVISORY#{repo}` / `{ghsa_id}`)
 - `src/nf_core_bot/security/advisories.py` — the scheduler loop, diffing logic,
   and Slack posting (digest + failure notices)
+- `src/nf_core_bot/commands/security/summary.py` — the `security summary` slash
+  command handler
