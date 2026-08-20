@@ -236,3 +236,64 @@ class TestCheckSecurityAdvisories:
         await check_security_advisories(client)
 
         client.chat_postMessage.assert_not_awaited()
+
+
+# ── security.advisories: format_advisories_summary ─────────────────────
+
+
+class TestFormatAdvisoriesSummary:
+    def test_no_open_advisories(self) -> None:
+        from nf_core_bot.security.advisories import format_advisories_summary
+
+        assert "No open security advisories" in format_advisories_summary([])
+
+    def test_excludes_closed_and_withdrawn(self) -> None:
+        from nf_core_bot.security.advisories import format_advisories_summary
+
+        advisories = [
+            SecurityAdvisory("rnaseq", "GHSA-a", "fixed one", "closed", "high", "2026-08-01", "https://x"),
+            SecurityAdvisory("rnaseq", "GHSA-b", "withdrawn one", "withdrawn", "high", "2026-08-01", "https://x"),
+        ]
+        summary = format_advisories_summary(advisories)
+        assert "No open security advisories" in summary
+
+    def test_groups_by_repo_and_includes_open_states(self) -> None:
+        from nf_core_bot.security.advisories import format_advisories_summary
+
+        advisories = [
+            SecurityAdvisory("rnaseq", "GHSA-a", "triage issue", "triage", "high", "2026-08-01", "https://x/a"),
+            SecurityAdvisory("sarek", "GHSA-b", "published issue", "published", None, "2026-08-02", "https://x/b"),
+            SecurityAdvisory("rnaseq", "GHSA-c", "old closed", "closed", "low", "2026-08-01", "https://x/c"),
+        ]
+        summary = format_advisories_summary(advisories)
+
+        assert "2 open security advisories" in summary
+        assert summary.index("*rnaseq*") < summary.index("*sarek*")
+        assert "<https://x/a|triage issue>" in summary
+        assert "`triage`" in summary and "high" in summary
+        assert "<https://x/b|published issue>" in summary
+        assert "GHSA-c" not in summary
+
+    def test_singular_count(self) -> None:
+        from nf_core_bot.security.advisories import format_advisories_summary
+
+        advisories = [SecurityAdvisory("rnaseq", "GHSA-a", "leak", "triage", "high", "2026-08-01", "https://x")]
+        assert "1 open security advisory " in format_advisories_summary(advisories)
+
+    def test_escapes_mrkdwn_in_summary_and_repo(self) -> None:
+        from nf_core_bot.security.advisories import format_advisories_summary
+
+        advisories = [
+            SecurityAdvisory(
+                "rnaseq",
+                "GHSA-a",
+                "leak> <https://evil.example.com|click>",
+                "triage",
+                "high",
+                "2026-08-01",
+                "https://x",
+            )
+        ]
+        summary = format_advisories_summary(advisories)
+        assert "<https://evil.example.com|click>" not in summary
+        assert "leak&gt; &lt;https://evil.example.com|click&gt;" in summary

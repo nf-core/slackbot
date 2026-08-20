@@ -105,6 +105,36 @@ async def _post_digest(client: AsyncWebClient, advisories: list[SecurityAdvisory
             logger.exception("Failed to post security advisory %s to Slack", adv.ghsa_id)
 
 
+# Advisory states that are resolved/done, so are excluded from "open".
+_CLOSED_STATES = frozenset({"closed", "withdrawn"})
+
+
+def format_advisories_summary(advisories: list[SecurityAdvisory]) -> str:
+    """Render a summary of all open advisories, grouped by repo, for ``/nf-core security summary``.
+
+    "Open" excludes ``closed``/``withdrawn`` states — ``triage``, ``draft`` and
+    ``published`` all still need attention. Summaries are attacker-influenced
+    (see ``_escape_mrkdwn``), same as the daily digest.
+    """
+    open_advisories = [a for a in advisories if a.state not in _CLOSED_STATES]
+    if not open_advisories:
+        return ":white_check_mark: No open security advisories across nf-core repos."
+
+    by_repo: dict[str, list[SecurityAdvisory]] = {}
+    for adv in open_advisories:
+        by_repo.setdefault(adv.repo, []).append(adv)
+
+    count = len(open_advisories)
+    lines = [f":closed_lock_with_key: *{count} open security advisor{'y' if count == 1 else 'ies'} across nf-core:*"]
+    for repo in sorted(by_repo):
+        lines.append(f"\n*{_escape_mrkdwn(repo)}*")
+        for adv in by_repo[repo]:
+            severity = f", {adv.severity}" if adv.severity else ""
+            summary = _escape_mrkdwn(adv.summary)
+            lines.append(f"• <{adv.url}|{summary}> (`{adv.state}`{severity}) — `{adv.ghsa_id}`")
+    return "\n".join(lines)
+
+
 async def _notify(client: AsyncWebClient, message: str) -> None:
     """Post a check-failure notice to the security channel — never fail silently."""
     channel = await resolve_channel_id(client, config.SECURITY_CHANNEL or "security")

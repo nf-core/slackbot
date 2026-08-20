@@ -30,7 +30,13 @@ from nf_core_bot.commands.hackathon.register import (
     handle_edit,
     handle_register,
 )
-from nf_core_bot.commands.help import handle_github_help, handle_hackathon_help, handle_help, handle_oncall_help
+from nf_core_bot.commands.help import (
+    handle_github_help,
+    handle_hackathon_help,
+    handle_help,
+    handle_oncall_help,
+    handle_security_help,
+)
 from nf_core_bot.commands.oncall.calendar_cmd import handle_oncall_calendar
 from nf_core_bot.commands.oncall.list_cmd import handle_oncall_list
 from nf_core_bot.commands.oncall.me import handle_oncall_me
@@ -39,6 +45,7 @@ from nf_core_bot.commands.oncall.skip import handle_oncall_skip
 from nf_core_bot.commands.oncall.switch import handle_oncall_switch
 from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
 from nf_core_bot.commands.proposals.review import handle_proposals_review
+from nf_core_bot.commands.security.summary import handle_security_summary
 from nf_core_bot.permissions.checks import is_core_team, is_core_team_or_maintainers
 
 if TYPE_CHECKING:
@@ -106,6 +113,11 @@ async def dispatch(
     # ── Pipeline-proposal review commands ────────────────────────────
     if sub == "proposals":
         await _route_proposals(ack, respond, client, user_id, command, rest)
+        return
+
+    # ── Security commands ─────────────────────────────────────────────
+    if sub == "security":
+        await _route_security(ack, respond, client, user_id, command, rest)
         return
 
     # ── Unknown ──────────────────────────────────────────────────────
@@ -346,5 +358,43 @@ async def _route_proposals(
     else:
         await respond(
             f"Unknown proposals command: `{sub}`. {_PROPOSALS_HELP}",
+            response_type="ephemeral",
+        )
+
+
+# ── Security dispatch ────────────────────────────────────────────────
+
+
+async def _route_security(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    command: dict[str, str],
+    tokens: list[str],
+) -> None:
+    """Dispatch ``/nf-core security <sub> [args…]``.
+
+    Restricted to ``@core-team`` members.
+    """
+    await ack()
+
+    if not await is_core_team(client, user_id):
+        await respond(
+            "Sorry, security commands are restricted to `@core-team` members.",
+            response_type="ephemeral",
+        )
+        return
+
+    if not tokens or tokens[0].lower() == "help":
+        await handle_security_help(respond)
+        return
+
+    sub = tokens[0].lower()
+    if sub == "summary":
+        await handle_security_summary(respond, client, user_id, command)
+    else:
+        await respond(
+            f"Unknown security command: `{sub}`. Run `/nf-core security help` for options.",
             response_type="ephemeral",
         )

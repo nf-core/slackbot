@@ -48,6 +48,10 @@ ONCALL_COMMANDS: list[tuple[str, str, str]] = [
     ("on-call calendar me", "Get a subscribable iCal URL for your on-call weeks", "admin"),
 ]
 
+SECURITY_COMMANDS: list[tuple[str, str, str]] = [
+    ("security summary", "Summarise all open GitHub security advisories across nf-core repos", "admin"),
+]
+
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
     (
@@ -57,6 +61,7 @@ GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ),
     ("on-call help", "Show on-call rotation commands (@core-team only)", "admin"),
     ("github help", "Show GitHub commands (@core-team only)", "admin"),
+    ("security help", "Show security commands (@core-team only)", "admin"),
 ]
 
 
@@ -172,5 +177,18 @@ async def handle_oncall_help(
     """
     sections = ["*On-call rotation commands* (`@core-team` only)\n"]
     sections.append(_format_commands(ONCALL_COMMANDS))
+
+    await respond("\n".join(sections), response_type="ephemeral")
+
+
+async def handle_security_help(
+    respond: Respond,
+) -> None:
+    """Security help: ``/nf-core security help``.
+
+    Only visible to ``@core-team`` members (permission checked in router).
+    """
+    sections = ["*Security commands* (`@core-team` only)\n"]
+    sections.append(_format_commands(SECURITY_COMMANDS))
 
     await respond("\n".join(sections), response_type="ephemeral")
