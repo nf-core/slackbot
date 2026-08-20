@@ -170,8 +170,8 @@ needed for creation or status changes.
 ## Security Advisory Digest
 
 The bot polls GitHub once a day for new or changed security advisories
-(including Triage/draft reports) across every nf-core repo and posts them to
-a private Slack channel for the core team to review — see
+(including Triage/draft reports) across every nf-core repo and posts them to a
+private Slack channel for the core team to review — see
 [docs/security-advisories.md](docs/security-advisories.md).
 
 ## Development
