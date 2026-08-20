@@ -167,6 +167,13 @@ needed for creation or status changes.
 - **`@core-team`** Slack user group — full admin access to all commands
 - **Site organisers** — can view attendees and export data for their site(s)
 
+## Security Advisory Digest
+
+The bot polls GitHub once a day for new or changed security advisories
+(including Triage/draft reports) across every nf-core repo and posts them to a
+private Slack channel for the core team to review — see
+[docs/security-advisories.md](docs/security-advisories.md).
+
 ## Development
 
 Generally speaking, just commit and push code. Automation on GitHub actions
@@ -185,4 +192,5 @@ mypy src/                      # Type check
 ```
 
 See also: [Slack App Setup](docs/slack-app-setup.md) ·
-[Command Reference](docs/commands.md) · [Deployment](docs/deployment.md)
+[Command Reference](docs/commands.md) · [Deployment](docs/deployment.md) ·
+[Security Advisory Digest](docs/security-advisories.md)

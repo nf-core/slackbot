@@ -31,6 +31,7 @@ _DEFAULTS: dict[str, str | None] = {
     "MAINTAINERS_USERGROUP_HANDLE": "maintainers-team",
     # Channels
     "ONCALL_CHANNEL": "core",
+    "SECURITY_CHANNEL": "security",
     # Calendar (S3 + CloudFront)
     "CALENDAR_S3_BUCKET": None,
     "CALENDAR_CLOUDFRONT_DOMAIN": None,

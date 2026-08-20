@@ -1,7 +1,11 @@
 """GitHub API checks — verify organisation membership, invite users.
 
 Uses the ``GITHUB_TOKEN`` env var, which must have ``admin:org`` scope
-for invitation/team-management operations.
+for invitation/team-management operations. Listing org-wide security
+advisories (``list_all_org_advisories``) additionally requires the
+account behind the token to be an org owner or security manager, plus
+the ``repository_advisories:write`` scope (or, for a fine-grained PAT,
+the "Repository security advisories" permission set to Write).
 """
 
 from __future__ import annotations
@@ -335,3 +339,64 @@ async def get_issue_with_comments(number: int, repo: str = PROPOSALS_REPO) -> Is
         body=issue.get("body", "") or "",
         comments=comments,
     )
+
+
+# ── Security advisories (for security.advisories) ─────────────────────
+
+
+@dataclass
+class SecurityAdvisory:
+    """A single repository security advisory, including Triage/draft state."""
+
+    repo: str
+    ghsa_id: str
+    summary: str
+    state: str  # triage, draft, published, closed
+    severity: str | None
+    updated_at: str
+    url: str
+
+
+# The org-wide advisories endpoint doesn't include a dedicated repository
+# field, but each advisory's API `url` is `.../repos/{org}/{repo}/security-advisories/{id}`.
+_ADVISORY_URL_REPO_RE = re.compile(r"/repos/[^/]+/([^/]+)/security-advisories/")
+
+
+def _repo_from_advisory_url(api_url: str) -> str:
+    match = _ADVISORY_URL_REPO_RE.search(api_url)
+    return match.group(1) if match else "unknown"
+
+
+async def list_all_org_advisories() -> list[SecurityAdvisory]:
+    """Return every security advisory across every repo in the org, including Triage/draft.
+
+    ``GET /orgs/{org}/security-advisories`` — a single org-wide call instead of
+    iterating every repo. Requires the account behind ``GITHUB_TOKEN`` to be an
+    org owner or security manager, plus either the ``repository_advisories:write``
+    scope (classic PAT) or the "Repository security advisories" permission set to
+    Write (fine-grained PAT).
+
+    Raises ``RuntimeError`` on a non-200 response so callers can distinguish "no
+    advisories" from "couldn't check" (e.g. missing security-manager role).
+    """
+    org = config.GITHUB_ORG
+    advisories: list[SecurityAdvisory] = []
+    path: str | None = f"/orgs/{org}/security-advisories?per_page=100"
+    while path:
+        resp = await _github_get(path)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Failed to list security advisories for org {org}: {resp.status_code} — {resp.text}")
+        for adv in resp.json():
+            advisories.append(
+                SecurityAdvisory(
+                    repo=_repo_from_advisory_url(adv.get("url", "")),
+                    ghsa_id=adv.get("ghsa_id", ""),
+                    summary=adv.get("summary", "") or adv.get("ghsa_id", ""),
+                    state=adv.get("state", ""),
+                    severity=adv.get("severity"),
+                    updated_at=adv.get("updated_at", ""),
+                    url=adv.get("html_url", ""),
+                )
+            )
+        path = resp.links.get("next", {}).get("url")
+    return advisories

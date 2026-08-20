@@ -32,6 +32,7 @@ from nf_core_bot.forms.handler import (
 from nf_core_bot.proposals import spawn as spawn_proposal_task
 from nf_core_bot.proposals.listener import handle_proposal_message, should_consider
 from nf_core_bot.scheduler.oncall_jobs import run_oncall_scheduler
+from nf_core_bot.security.advisories import run_security_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -167,6 +168,12 @@ async def _start() -> None:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     logger.info("On-call scheduler started.")
+
+    # Launch the security advisory scheduler as a background task.
+    security_task = asyncio.create_task(run_security_scheduler(app.client))
+    _background_tasks.add(security_task)
+    security_task.add_done_callback(_background_tasks.discard)
+    logger.info("Security advisory scheduler started.")
 
     handler = AsyncSocketModeHandler(app, config.SLACK_APP_TOKEN)
     await handler.start_async()  # type: ignore[no-untyped-call]
