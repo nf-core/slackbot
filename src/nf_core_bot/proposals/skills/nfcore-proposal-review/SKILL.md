@@ -164,6 +164,7 @@ indentation, `[text](url)` links, and code blocks.
   not add `---` separators or a top-level heading. The bot's wrapper supplies the
   title, the `@core-team` tag, and the automated/non-binding disclaimer above your
   body — do not write your own disclaimer.
+- **Seriously, NO PREAMBLE**. The very first word after the template text should be **Overall** (see below)
 - **Be brief.** Keep the whole message (excluding the draft GitHub comment) well
   under ~1500 characters. Short bullets, not paragraphs. Cut anything a
   maintainer doesn't need to decide.
@@ -183,6 +184,10 @@ surrounding explanation):
 > - **Specificity:** ❌ 2/5 — ≤8 words
 > - **Testability:** ✅ 5/5 — ≤8 words
 > - **Sustainability:** 🔴 2/5 — ≤8 words
+> 
+> **Summary**
+>
+> Short sentence summarising what the pipeline will be used for.
 >
 > **Why**
 >
@@ -218,6 +223,11 @@ triple-backtick code block so a maintainer can copy it. Inside that block:
   as the Slack **Suggested reviewers** line) so they're looped into the thread.
 - If you're not familiar with the domain, say so — flagging an apparent overlap
   from a non-expert perspective is still valuable.
+
+Once the Slack message is prepared, check that there is definitely no preamble.
+The message should begin with the template text, then go directly into **Overview**.
+If you find text such as _"Now I have enough information. Let me compile the assessment."_
+then remove this.
 
 ## Common patterns and pitfalls
 
