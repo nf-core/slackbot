@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -24,7 +24,7 @@ async def add_to_megatests(client: AsyncWebClient, slack_user_id: str) -> bool:
         logger.info("Seqera workspace sync is not configured; skipping user %s", slack_user_id)
         return False
 
-    response = await client.users_info(user=slack_user_id)
+    response: Any = await client.users_info(user=slack_user_id)
     email = response.get("user", {}).get("profile", {}).get("email")
     if not email:
         logger.warning("Slack user %s has no visible email; cannot sync to Seqera", slack_user_id)

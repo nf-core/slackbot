@@ -79,9 +79,9 @@ aws --profile nf-core --region eu-west-1 ssm put-parameter \
 ```
 
 The Seqera token needs permission to add workspace participants. On a successful
-nf-core GitHub invitation, the bot uses the Slack member's email and assigns
-the `nf-core-read-only` custom role in the `nf-core/megatests` workspace. Users
-must already have a Seqera account matching their Slack email. Add the
+nf-core GitHub invitation, the bot uses the Slack member's email and assigns the
+`nf-core-read-only` custom role in the `nf-core/megatests` workspace. Users must
+already have a Seqera account matching their Slack email. Add the
 `users:read.email` Slack bot scope and reinstall the Slack app for the email
 lookup to work.
 
