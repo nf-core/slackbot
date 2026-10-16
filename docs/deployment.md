@@ -70,7 +70,20 @@ aws --profile nf-core --region eu-west-1 ssm put-parameter \
   --name /nf-core-bot/SLACK_APP_TOKEN --type SecureString --value "xapp-..."
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
   --name /nf-core-bot/GITHUB_TOKEN --type SecureString --value "github_pat_..."
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_TOKEN --type SecureString --value "<Seqera access token>"
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_ORG_ID --type SecureString --value "<nf-core org numeric ID>"
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_WORKSPACE_ID --type SecureString --value "<megatests workspace numeric ID>"
 ```
+
+The Seqera token needs permission to add workspace participants. On a successful
+nf-core GitHub invitation, the bot uses the Slack member's email and assigns
+the `nf-core-read-only` custom role in the `nf-core/megatests` workspace. Users
+must already have a Seqera account matching their Slack email. Add the
+`users:read.email` Slack bot scope and reinstall the Slack app for the email
+lookup to work.
 
 Optional — a Workspace Admin/Owner user token enables writing members' GitHub
 usernames into their Slack profiles after an org invite (see

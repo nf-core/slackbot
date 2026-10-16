@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nf_core_bot.checks.github import add_to_team, check_org_membership, check_user_exists, invite_to_org
+from nf_core_bot.checks.seqera import add_to_megatests
 from nf_core_bot.checks.slack_profile import set_github_username
 
 if TYPE_CHECKING:
@@ -45,6 +46,15 @@ async def _reply_or_dm(
     """Try the channel *reply*; fall back to a DM if it fails."""
     if not await _safe_reply(reply, text):
         await _dm_caller(client, caller_user_id, text)
+
+
+async def _sync_seqera(client: AsyncWebClient, user_id: str) -> bool:
+    """Best-effort Seqera sync for a Slack user."""
+    try:
+        return await add_to_megatests(client, user_id)
+    except Exception:
+        logger.exception("Failed to sync Slack user %s to Seqera", user_id)
+        return False
 
 
 async def invite_and_greet(
@@ -102,6 +112,14 @@ async def invite_and_greet(
     if membership.ok:
         msg = f"`{github_username}` is already a member of the nf-core GitHub org — nothing to do."
         await _reply_or_dm(reply, client, caller_user_id, msg)
+        if greeting_user_id is not None:
+            synced = await _sync_seqera(client, greeting_user_id)
+            status = "added" if synced else "could not be added"
+            await _dm_caller(
+                client,
+                caller_user_id,
+                f"Seqera sync: <@{greeting_user_id}> {status} to the megatests workspace.",
+            )
         return False
 
     # ── 1. Org invite ────────────────────────────────────────────────
@@ -157,10 +175,20 @@ async def invite_and_greet(
     if greeting_user_id is not None:
         await set_github_username(client, greeting_user_id, github_username)
 
+    seqera_synced = False
+    if greeting_user_id is not None:
+        seqera_synced = await _sync_seqera(client, greeting_user_id)
+
     # Always DM the caller as a failsafe confirmation
     dm_text = (
         f"Done! `{github_username}` has been invited to the nf-core GitHub org and added to the contributors team."
     )
+    if greeting_user_id is not None:
+        dm_text += (
+            " They were also added to the Seqera megatests workspace."
+            if seqera_synced
+            else " Seqera workspace sync did not complete; check the bot logs and add them manually if needed."
+        )
     await _dm_caller(client, caller_user_id, dm_text)
 
     return True

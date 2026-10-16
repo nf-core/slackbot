@@ -130,6 +130,9 @@ class NfCoreBotStack(Stack):
             "SLACK_APP_TOKEN",
             "SLACK_ADMIN_USER_TOKEN",
             "GITHUB_TOKEN",
+            "SEQERA_TOKEN",
+            "SEQERA_ORG_ID",
+            "SEQERA_WORKSPACE_ID",
         ]
 
         # CloudWatch log group for the container
@@ -158,6 +161,7 @@ class NfCoreBotStack(Stack):
             # Plain-text environment variables
             environment={
                 "GITHUB_ORG": "nf-core",
+                "SEQERA_WORKSPACE_ROLE": "nf-core-read-only",
                 "AWS_DEFAULT_REGION": "eu-west-1",
                 "DYNAMODB_TABLE": "nf-core-bot",
                 "CORE_TEAM_USERGROUP_HANDLE": "core-team",

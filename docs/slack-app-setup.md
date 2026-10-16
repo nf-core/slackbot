@@ -32,6 +32,7 @@ public URL.
 | `commands`           | Register and receive slash commands                                           |
 | `chat:write`         | Post messages and thread replies                                              |
 | `users:read`         | Look up user info                                                             |
+| `users:read.email`   | Read the user's email for Seqera workspace access                             |
 | `users.profile:read` | Read GitHub username from Slack profile custom fields                         |
 | `usergroups:read`    | Check `@core-team` membership for permission gating                           |
 | `im:write`           | Open DMs to send confirmations, reminders, and registration messages          |
