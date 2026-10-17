@@ -1,4 +1,4 @@
-"""Tests for Seqera workspace access: checks.seqera, db.seqera and the removal job."""
+"""Tests for Seqera access: checks.seqera, db.seqera and the removal job."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import httpx
 import pytest
 
 from nf_core_bot.checks.github import get_org_membership_state
-from nf_core_bot.checks.seqera import SeqeraStatus, add_to_megatests, remove_participant
-from nf_core_bot.db.seqera import delete_member, list_members, put_member
+from nf_core_bot.checks.seqera import SeqeraStatus, add_to_megatests, remove_record, seqera_groups
+from nf_core_bot.db.seqera import delete_member, get_member, list_members, put_member
 from nf_core_bot.scheduler import seqera_jobs
 from tests.helpers import make_slack_client
 
@@ -148,23 +148,36 @@ class TestAddToMegatests:
         assert "ConnectError" in result.message
 
 
-# ── remove_participant ───────────────────────────────────────────────
+# ── remove_record ────────────────────────────────────────────────────
 
 
-class TestRemoveParticipant:
+class TestRemoveRecord:
     @pytest.mark.parametrize("status", [204, 404])
-    async def test_gone(self, monkeypatch: pytest.MonkeyPatch, seqera_env: None, status: int) -> None:
+    async def test_gone_deletes_record(
+        self, monkeypatch: pytest.MonkeyPatch, seqera_env: None, ddb_table: Any, status: int
+    ) -> None:
         requests = _mock_seqera(monkeypatch, lambda r: httpx.Response(status))
+        await put_member("22", "U1", "octocat", "a@example.org", 99)
+        member = await get_member("22", "U1")
+        assert member is not None
 
-        assert await remove_participant(99) is True
+        await remove_record(seqera_groups()["megatests"], member)
+
         assert requests[0].method == "DELETE"
         assert str(requests[0].url) == "https://api.cloud.seqera.io/orgs/11/workspaces/22/participants/99"
+        assert await get_member("22", "U1") is None
 
-    async def test_error_raises(self, monkeypatch: pytest.MonkeyPatch, seqera_env: None) -> None:
+    async def test_error_raises_and_keeps_record(
+        self, monkeypatch: pytest.MonkeyPatch, seqera_env: None, ddb_table: Any
+    ) -> None:
         _mock_seqera(monkeypatch, lambda r: httpx.Response(500, json={"message": "nope"}))
+        await put_member("22", "U1", "octocat", "a@example.org", 99)
+        member = await get_member("22", "U1")
+        assert member is not None
 
         with pytest.raises(RuntimeError, match="500"):
-            await remove_participant(99)
+            await remove_record(seqera_groups()["megatests"], member)
+        assert await get_member("22", "U1") is not None
 
 
 # ── db.seqera ────────────────────────────────────────────────────────
@@ -231,7 +244,7 @@ class TestSeqeraRemovalSync:
     async def test_not_configured(self, ddb_table: Any) -> None:
         assert await seqera_jobs.sync_seqera_removals() is None
 
-    @patch("nf_core_bot.scheduler.seqera_jobs.remove_participant")
+    @patch("nf_core_bot.scheduler.seqera_jobs.remove_record")
     @patch("nf_core_bot.scheduler.seqera_jobs.get_org_membership_state", side_effect=_membership)
     async def test_dry_run_only_logs(
         self, _state: AsyncMock, mock_remove: AsyncMock, seqera_env: None, ddb_table: Any
@@ -249,17 +262,16 @@ class TestSeqeraRemovalSync:
         mock_remove.assert_not_awaited()
         assert len(await list_members("22")) == 4
 
-    @patch("nf_core_bot.scheduler.seqera_jobs.remove_participant", return_value=True)
     @patch("nf_core_bot.scheduler.seqera_jobs.get_org_membership_state", side_effect=_membership)
     async def test_live_removes_only_leavers(
         self,
         _state: AsyncMock,
-        mock_remove: AsyncMock,
         seqera_env: None,
         ddb_table: Any,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("SEQERA_REMOVAL_DRY_RUN", "false")
+        requests = _mock_seqera(monkeypatch, lambda r: httpx.Response(204))
         await _seed_members()
 
         summary = await seqera_jobs.sync_seqera_removals()
@@ -267,11 +279,11 @@ class TestSeqeraRemovalSync:
         assert summary is not None
         assert summary.dry_run is False
         assert [label.split()[0] for label in summary.removed] == ["left-user"]
-        mock_remove.assert_awaited_once_with(3)
+        assert [(r.method, r.url.path) for r in requests] == [("DELETE", "/orgs/11/workspaces/22/participants/3")]
         remaining = sorted(m.slack_user_id for m in await list_members("22"))
         assert remaining == ["U_ACTIVE", "U_ERR", "U_PENDING"]
 
-    @patch("nf_core_bot.scheduler.seqera_jobs.remove_participant", side_effect=RuntimeError("HTTP 500"))
+    @patch("nf_core_bot.scheduler.seqera_jobs.remove_record", side_effect=RuntimeError("HTTP 500"))
     @patch("nf_core_bot.scheduler.seqera_jobs.get_org_membership_state", return_value=None)
     async def test_failed_removal_keeps_record(
         self,

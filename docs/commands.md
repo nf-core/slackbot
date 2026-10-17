@@ -531,15 +531,64 @@ of every open advisory (`triage`, `draft`, or `published` — excludes
 ephemerally, so anyone there can see the result. Falls back to DMing you if the
 bot can't post where the command was run (e.g. a channel it isn't a member of).
 
+## Seqera Platform Commands
+
+These commands manage access to Seqera Platform by named group. All require
+`@core-team` Slack user group membership. Replies are ephemeral.
+
+Groups are defined in code: `megatests` (the `nf-core/megatests` workspace with
+the read-only role, configured as described in
+[Deployment](deployment.md#seqera-megatests-workspace-access)) plus any entries
+in `SEQERA_GROUPS` in `src/nf_core_bot/checks/seqera.py`. A group targets either
+a workspace (with a role) or an organisation team.
+
+### `seqera help`
+
+```
+/nf-core seqera help
+```
+
+Show Seqera command help.
+
+### `seqera add`
+
+```
+/nf-core seqera add @user <group> [--email foo@bar.com]
+```
+
+Add a Slack user to a group. Uses their Slack email unless `--email` gives their
+Seqera Platform email. The user needs a GitHub username on their Slack profile,
+so the weekly removal sync can check they are still in the nf-core GitHub org.
+Each add is recorded in DynamoDB.
+
+### `seqera remove`
+
+```
+/nf-core seqera remove @user <group>
+```
+
+Remove a Slack user from a group. Only works for access the bot recorded; remove
+anything granted by hand in Seqera Platform.
+
+### `seqera list`
+
+```
+/nf-core seqera list
+/nf-core seqera list @user
+```
+
+With no argument, lists the groups and how many members the bot added to each.
+With a user, lists the groups the bot added them to and the email used.
+
 ---
 
 ## Permission Model
 
-| Level              | Who                                          | Access                                                                                                        |
-| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites`                                      |
-| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                                                           |
-| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *`, `/nf-core security *` |
+| Level              | Who                                          | Access                                                                                                                             |
+| ------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **User**           | Everyone                                     | `/hackathon list`, `/hackathon register/edit/cancel`, `/hackathon sites`                                                           |
+| **Site organiser** | Per-hackathon, per-site (stored in DynamoDB) | `/hackathon export`                                                                                                                |
+| **Admin**          | `@core-team` Slack user group members        | All commands including `/hackathon admin *`, `/nf-core github *`, `/nf-core on-call *`, `/nf-core security *`, `/nf-core seqera *` |
 
 Admin membership is checked via `usergroups.users.list` and cached for 5
 minutes.

@@ -1,10 +1,10 @@
-"""Background job: remove people who left the nf-core GitHub org from the Seqera workspace.
+"""Background job: remove people who left the nf-core GitHub org from Seqera.
 
 Launched as an ``asyncio.Task`` from ``app.py`` at startup, alongside the
-on-call scheduler. Once a week it checks every participant the bot added
-(recorded in DynamoDB by ``checks/seqera.py``) against the nf-core GitHub org
-and removes anyone who is no longer a member or invitee from the megatests
-workspace. Participants added by hand are never recorded, so never touched.
+on-call scheduler. Once a week it checks every member the bot added to any
+Seqera group (recorded in DynamoDB by ``checks/seqera.py``) against the
+nf-core GitHub org and removes anyone who is no longer a member or invitee
+from that group. Access granted by hand is never recorded, so never touched.
 
 While ``SEQERA_REMOVAL_DRY_RUN`` is on (the default) it only logs who it would
 remove.
@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 
 from nf_core_bot import config
 from nf_core_bot.checks.github import get_org_membership_state
-from nf_core_bot.checks.seqera import removal_dry_run, remove_participant
-from nf_core_bot.db.seqera import delete_member, list_members
+from nf_core_bot.checks.seqera import SeqeraGroup, removal_dry_run, remove_record, seqera_groups
+from nf_core_bot.db.seqera import SeqeraMember, list_members
 
 logger = logging.getLogger(__name__)
 
@@ -68,44 +68,21 @@ async def _tick(now_utc: datetime.datetime | None = None) -> None:
 
 
 async def sync_seqera_removals() -> RemovalSummary | None:
-    """Remove bot-added participants who are no longer in the nf-core GitHub org.
+    """Remove bot-added members who are no longer in the nf-core GitHub org, from every group.
 
-    Returns ``None`` when Seqera sync isn't configured. Any GitHub or Seqera
-    error for one person is logged and skipped, never treated as "left".
+    Returns ``None`` when Seqera isn't configured. Any GitHub or Seqera error
+    for one person is logged and skipped, never treated as "left".
     """
-    workspace_id = config.SEQERA_WORKSPACE_ID
-    if not (config.SEQERA_TOKEN and config.SEQERA_ORG_ID and workspace_id):
-        logger.info("Seqera workspace sync is not configured; skipping removal sync")
+    if not (config.SEQERA_TOKEN and config.SEQERA_ORG_ID):
+        logger.info("Seqera is not configured; skipping removal sync")
         return None
 
     summary = RemovalSummary(dry_run=removal_dry_run())
-    members = await list_members(workspace_id)
-    for member in members:
-        summary.checked += 1
-        label = f"{member.github_username} ({member.email}, Slack {member.slack_user_id})"
-        try:
-            state = await get_org_membership_state(member.github_username)
-        except Exception:
-            logger.exception("Could not check GitHub org membership for %s; skipping", label)
-            summary.errors.append(label)
+    for group_name, group in seqera_groups().items():
+        if group.target_key is None:
             continue
-        if state is not None:
-            continue
-
-        if summary.dry_run:
-            logger.info("[dry run] Would remove %s from Seqera workspace %s", label, workspace_id)
-            summary.would_remove.append(label)
-            continue
-
-        try:
-            await remove_participant(member.participant_id)
-            await delete_member(workspace_id, member.slack_user_id)
-        except Exception:
-            logger.exception("Failed to remove %s from Seqera workspace %s", label, workspace_id)
-            summary.errors.append(label)
-            continue
-        logger.info("Removed %s from Seqera workspace %s (left the GitHub org)", label, workspace_id)
-        summary.removed.append(label)
+        for member in await list_members(group.target_key):
+            await _check_member(summary, group_name, group, member)
 
     logger.info(
         "Seqera removal sync%s: checked %d, removed %d, would remove %d, errors %d",
@@ -116,3 +93,30 @@ async def sync_seqera_removals() -> RemovalSummary | None:
         len(summary.errors),
     )
     return summary
+
+
+async def _check_member(summary: RemovalSummary, group_name: str, group: SeqeraGroup, member: SeqeraMember) -> None:
+    summary.checked += 1
+    label = f"{member.github_username} ({member.email}, Slack {member.slack_user_id}, {group_name})"
+    try:
+        state = await get_org_membership_state(member.github_username)
+    except Exception:
+        logger.exception("Could not check GitHub org membership for %s; skipping", label)
+        summary.errors.append(label)
+        return
+    if state is not None:
+        return
+
+    if summary.dry_run:
+        logger.info("[dry run] Would remove %s from Seqera", label)
+        summary.would_remove.append(label)
+        return
+
+    try:
+        await remove_record(group, member)
+    except Exception:
+        logger.exception("Failed to remove %s from Seqera", label)
+        summary.errors.append(label)
+        return
+    logger.info("Removed %s from Seqera (left the GitHub org)", label)
+    summary.removed.append(label)
