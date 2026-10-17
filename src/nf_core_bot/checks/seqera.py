@@ -97,6 +97,24 @@ async def _slack_email(client: AsyncWebClient, slack_user_id: str) -> str | None
     return email
 
 
+async def _is_participant(settings: _Settings, email: str) -> bool:
+    """Return ``True`` if *email* is already a participant of the workspace.
+
+    ``GET .../participants?search=<email>`` — used to tell a duplicate apart
+    from the other 409 case ("collaborator not permitted for organization
+    with active SSO"). Raises on an HTTP error.
+    """
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.get(
+            _participants_url(settings),
+            headers={"Authorization": f"Bearer {settings.token}"},
+            params={"search": email},
+        )
+    resp.raise_for_status()
+    participants = resp.json().get("participants") or []
+    return any((p.get("email") or "").lower() == email.lower() for p in participants)
+
+
 async def add_to_megatests(
     client: AsyncWebClient,
     slack_user_id: str,
@@ -133,12 +151,27 @@ async def add_to_megatests(
         return SeqeraResult(SeqeraStatus.API_ERROR, f"could not reach the Seqera API ({type(e).__name__})", email)
 
     if resp.status_code == 409:
-        logger.info("Slack user %s (%s) is already in Seqera workspace %s", slack_user_id, email, settings.workspace_id)
-        return SeqeraResult(SeqeraStatus.ALREADY_PARTICIPANT, "already a participant of the workspace", email)
+        # The spec lists 409 for both a duplicate and an SSO-blocked collaborator,
+        # so confirm the user really is a participant before saying so.
+        try:
+            already = await _is_participant(settings, email)
+        except httpx.HTTPError:
+            logger.exception("Could not look up Seqera participant %s after a 409", email)
+            already = False
+        if already:
+            logger.info(
+                "Slack user %s (%s) is already in Seqera workspace %s", slack_user_id, email, settings.workspace_id
+            )
+            return SeqeraResult(SeqeraStatus.ALREADY_PARTICIPANT, "already a participant of the workspace", email)
 
     if resp.status_code == 404:
-        logger.warning("No Seqera account for Slack user %s (%s): %s", slack_user_id, email, _error_message(resp))
-        return SeqeraResult(SeqeraStatus.NO_ACCOUNT, f"no Seqera Platform account was found for `{email}`", email)
+        # Not in the spec for this endpoint; unconfirmed whether Seqera uses it
+        # for an unknown email, so pass its own message through as well.
+        detail = _error_message(resp)
+        logger.warning("No Seqera account for Slack user %s (%s): %s", slack_user_id, email, detail)
+        return SeqeraResult(
+            SeqeraStatus.NO_ACCOUNT, f"no Seqera Platform account was found for `{email}` ({detail})", email
+        )
 
     if not resp.is_success:
         detail = _error_message(resp)

@@ -43,6 +43,17 @@ def _mock_seqera(monkeypatch: pytest.MonkeyPatch, handler: Handler) -> list[http
     return requests
 
 
+def _conflict_then_search(participants: list[dict[str, Any]]) -> Handler:
+    """409 on the add, then *participants* from the participant search."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            return httpx.Response(409, json={"message": "collaborator not permitted for organization with active SSO"})
+        return httpx.Response(200, json={"participants": participants, "totalSize": len(participants)})
+
+    return handler
+
+
 def _slack_client(email: str | None = "slack@example.org") -> AsyncMock:
     client = make_slack_client()
     profile = {"email": email} if email else {}
@@ -108,13 +119,45 @@ class TestAddToMegatests:
     async def test_already_participant_not_recorded(
         self, monkeypatch: pytest.MonkeyPatch, seqera_env: None, ddb_table: Any
     ) -> None:
-        _mock_seqera(monkeypatch, lambda r: httpx.Response(409, json={"message": "Duplicate element"}))
+        requests = _mock_seqera(
+            monkeypatch,
+            _conflict_then_search([{"email": "Slack@Example.org", "participantId": 5}]),
+        )
 
         result = await add_to_megatests(_slack_client(), "U1", "octocat")
 
         assert result.status is SeqeraStatus.ALREADY_PARTICIPANT
         assert result.has_access
         assert await list_members("22") == []
+        assert requests[1].method == "GET"
+        assert requests[1].url.params["search"] == "slack@example.org"
+
+    async def test_conflict_without_participant_is_error(
+        self, monkeypatch: pytest.MonkeyPatch, seqera_env: None
+    ) -> None:
+        _mock_seqera(monkeypatch, _conflict_then_search([]))
+
+        result = await add_to_megatests(_slack_client(), "U1", "octocat")
+
+        assert result.status is SeqeraStatus.API_ERROR
+        assert not result.has_access
+        assert "409" in result.message
+        assert "collaborator not permitted" in result.message
+
+    async def test_conflict_with_failed_lookup_is_error(
+        self, monkeypatch: pytest.MonkeyPatch, seqera_env: None
+    ) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "PUT":
+                return httpx.Response(409, json={"message": "Duplicate element"})
+            return httpx.Response(500)
+
+        _mock_seqera(monkeypatch, handler)
+
+        result = await add_to_megatests(_slack_client(), "U1", "octocat")
+
+        assert result.status is SeqeraStatus.API_ERROR
+        assert "409" in result.message
 
     async def test_no_account(self, monkeypatch: pytest.MonkeyPatch, seqera_env: None) -> None:
         _mock_seqera(monkeypatch, lambda r: httpx.Response(404, json={"message": "User not found"}))
@@ -124,6 +167,7 @@ class TestAddToMegatests:
         assert result.status is SeqeraStatus.NO_ACCOUNT
         assert not result.has_access
         assert "slack@example.org" in result.message
+        assert "User not found" in result.message
 
     async def test_api_error_includes_status_and_message(
         self, monkeypatch: pytest.MonkeyPatch, seqera_env: None

@@ -84,8 +84,13 @@ The Seqera token needs permission to add and remove workspace participants.
 Whenever `github add` (or the **Add to GitHub org** shortcut) runs for a Slack
 user, the bot adds them to the `nf-core/megatests` workspace with the
 `nf-core-read-only` custom role (`SEQERA_WORKSPACE_ROLE`). This happens for new
-joiners and for people already in the GitHub org. If any of the three `SEQERA_*`
-parameters is missing, the step is skipped silently.
+joiners and for people already in the GitHub org.
+
+All three `SEQERA_*` parameters must exist in SSM **before** you deploy this
+stack. They are injected as ECS secrets, so if any is missing the task fails to
+start and the whole bot goes down, not just the Seqera step. (When running
+locally, leaving the `SEQERA_*` environment variables unset skips the step
+silently.)
 
 - **Email used:** the answer to the optional Platform email question on the
   "GitHub Invitation Request" workflow form (see below), otherwise the member's
@@ -95,7 +100,10 @@ parameters is missing, the step is skipped silently.
   megatests access. The core-team member who ran the command gets a DM with the
   outcome: added, already a participant, or why it failed (no email on the Slack
   profile, no Seqera account for that email, or a Seqera API error with its HTTP
-  status).
+  status). Seqera's own error message is included in the DM. A 409 from the add
+  call is only reported as "already a participant" after a participant lookup
+  confirms it, because Seqera also uses 409 when an SSO organization won't
+  accept the user as a collaborator.
 - **Records:** each successful add is stored in the bot's DynamoDB table
   (`PK=SEQERA#<workspace-id> SK=USER#<slack-user-id>`, with the GitHub username,
   email used and Seqera participant ID). People who were already participants,
