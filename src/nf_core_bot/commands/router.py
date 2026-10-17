@@ -2,7 +2,8 @@
 
 Two slash commands share this router:
 
-* ``/nf-core <subcommand>`` — top-level help, GitHub commands
+* ``/nf-core <subcommand>`` — top-level help, GitHub, on-call, proposals,
+  security and Seqera commands
 * ``/hackathon <subcommand>`` — all hackathon commands
 
 ``app.py`` registers both commands and delegates to the appropriate
@@ -36,6 +37,7 @@ from nf_core_bot.commands.help import (
     handle_help,
     handle_oncall_help,
     handle_security_help,
+    handle_seqera_help,
 )
 from nf_core_bot.commands.oncall.calendar_cmd import handle_oncall_calendar
 from nf_core_bot.commands.oncall.list_cmd import handle_oncall_list
@@ -46,6 +48,7 @@ from nf_core_bot.commands.oncall.switch import handle_oncall_switch
 from nf_core_bot.commands.oncall.unavailable import handle_oncall_unavailable
 from nf_core_bot.commands.proposals.review import handle_proposals_review
 from nf_core_bot.commands.security.summary import handle_security_summary
+from nf_core_bot.commands.seqera.manage import handle_seqera_add, handle_seqera_list, handle_seqera_remove
 from nf_core_bot.permissions.checks import is_core_team, is_core_team_or_maintainers
 
 if TYPE_CHECKING:
@@ -118,6 +121,11 @@ async def dispatch(
     # ── Security commands ─────────────────────────────────────────────
     if sub == "security":
         await _route_security(ack, respond, client, user_id, command, rest)
+        return
+
+    # ── Seqera Platform commands ─────────────────────────────────────
+    if sub == "seqera":
+        await _route_seqera(ack, respond, client, user_id, rest)
         return
 
     # ── Unknown ──────────────────────────────────────────────────────
@@ -398,3 +406,50 @@ async def _route_security(
             f"Unknown security command: `{sub}`. Run `/nf-core security help` for options.",
             response_type="ephemeral",
         )
+
+
+# ── Seqera dispatch ──────────────────────────────────────────────────
+
+_SEQERA_DISPATCH: dict[str, object] = {
+    "add": handle_seqera_add,
+    "remove": handle_seqera_remove,
+    "list": handle_seqera_list,
+}
+
+
+async def _route_seqera(
+    ack: Ack,
+    respond: Respond,
+    client: AsyncWebClient,
+    user_id: str,
+    tokens: list[str],
+) -> None:
+    """Dispatch ``/nf-core seqera <sub> [args…]``.
+
+    Restricted to ``@core-team`` members.
+    """
+    await ack()
+
+    if not await is_core_team(client, user_id):
+        await respond(
+            "Sorry, Seqera commands are restricted to `@core-team` members.",
+            response_type="ephemeral",
+        )
+        return
+
+    if not tokens or tokens[0].lower() == "help":
+        await handle_seqera_help(respond)
+        return
+
+    sub = tokens[0].lower()
+    rest = tokens[1:]
+
+    handler = _SEQERA_DISPATCH.get(sub)
+    if handler is None:
+        await respond(
+            f"Unknown seqera command: `{sub}`. Run `/nf-core seqera help` for options.",
+            response_type="ephemeral",
+        )
+        return
+
+    await handler(respond, client, user_id, rest)  # type: ignore[operator]

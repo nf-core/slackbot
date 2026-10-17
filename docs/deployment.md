@@ -108,13 +108,20 @@ any question whose text mentions "Platform" or "Seqera" and "email", and uses
 the first email address in the answer. This is configured in Slack, not in this
 repo.
 
+**Other groups.** `/nf-core seqera add|remove|list` manages access for
+`megatests` and any other group listed in `SEQERA_GROUPS` in
+`src/nf_core_bot/checks/seqera.py` (a workspace ID and role, or an organisation
+team ID). Adding a group is a code change; only the token and org ID live in
+SSM. The token needs permission to add and remove members of every group's
+workspace or team. See [Commands](commands.md#seqera-platform-commands).
+
 **Weekly removal sync.** Every Monday at 09:00 UTC the bot checks each recorded
-participant against the nf-core GitHub org
+member of every group against the nf-core GitHub org
 (`GET /orgs/nf-core/memberships/{username}`). Anyone with neither an active
-membership nor a pending invitation is removed from the megatests workspace and
-their record is deleted. Only people the bot recorded are touched, and only in
-the configured workspace. GitHub or Seqera errors for a person are logged and
-that person is skipped until the next run.
+membership nor a pending invitation is removed from that group and their record
+is deleted. Only people the bot recorded are touched, and only in the configured
+groups. GitHub or Seqera errors for a person are logged and that person is
+skipped until the next run.
 
 **Dry run.** `SEQERA_REMOVAL_DRY_RUN` (plain environment variable in
 `infra/stacks/bot_stack.py`, default `true`) makes the removal sync log

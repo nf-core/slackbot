@@ -52,6 +52,13 @@ SECURITY_COMMANDS: list[tuple[str, str, str]] = [
     ("security summary", "Summarise all open GitHub security advisories across nf-core repos", "admin"),
 ]
 
+SEQERA_COMMANDS: list[tuple[str, str, str]] = [
+    ("seqera add @user <group> [--email foo@bar.com]", "Give a Slack user access to a Seqera group", "admin"),
+    ("seqera remove @user <group>", "Remove access the bot granted for a Seqera group", "admin"),
+    ("seqera list", "List the Seqera groups", "admin"),
+    ("seqera list @user", "List the Seqera groups the bot added a user to", "admin"),
+]
+
 GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("help", "Show this help message", "all"),
     (
@@ -62,6 +69,7 @@ GENERAL_COMMANDS: list[tuple[str, str, str]] = [
     ("on-call help", "Show on-call rotation commands (@core-team only)", "admin"),
     ("github help", "Show GitHub commands (@core-team only)", "admin"),
     ("security help", "Show security commands (@core-team only)", "admin"),
+    ("seqera help", "Show Seqera Platform access commands (@core-team only)", "admin"),
 ]
 
 
@@ -190,5 +198,22 @@ async def handle_security_help(
     """
     sections = ["*Security commands* (`@core-team` only)\n"]
     sections.append(_format_commands(SECURITY_COMMANDS))
+
+    await respond("\n".join(sections), response_type="ephemeral")
+
+
+async def handle_seqera_help(
+    respond: Respond,
+) -> None:
+    """Seqera help: ``/nf-core seqera help``.
+
+    Only visible to ``@core-team`` members (permission checked in router).
+    """
+    sections = ["*Seqera Platform commands* (`@core-team` only)\n"]
+    sections.append(_format_commands(SEQERA_COMMANDS))
+    sections.append(
+        "\n`--email` sets the Seqera Platform email when it differs from their Slack email. "
+        "`remove` only works for access the bot granted."
+    )
 
     await respond("\n".join(sections), response_type="ephemeral")

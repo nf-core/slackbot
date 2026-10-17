@@ -44,10 +44,10 @@ Slack ←→ ECS Fargate (Bolt app) ←→ DynamoDB ←→ GitHub API
 
 ### Three slash-command namespaces share one router
 
-`/nf-core` handles top-level help, GitHub commands, and on-call commands.
-`/hackathon` handles all hackathon commands. Both are registered in `app.py` and
-delegate to `commands/router.py` which parses subcommands and dispatches to
-handlers.
+`/nf-core` handles top-level help, GitHub, on-call, security and Seqera
+commands. `/hackathon` handles all hackathon commands. Both are registered in
+`app.py` and delegate to `commands/router.py` which parses subcommands and
+dispatches to handlers.
 
 ### Multi-step modal flow (the critical cross-file path)
 
@@ -87,6 +87,15 @@ The same flow adds the Slack user to the Seqera `nf-core/megatests` workspace
 (`checks/seqera.py`) before posting the welcome, and records the add in
 DynamoDB. `scheduler/seqera_jobs.py` removes recorded users who have left the
 GitHub org once a week (log-only while `SEQERA_REMOVAL_DRY_RUN` is on).
+
+### Seqera access commands
+
+`/nf-core seqera add|remove|list` (`commands/seqera/manage.py`, `@core-team`
+only, checked in `_route_seqera()`) manages Seqera access by named group. Groups
+are `SeqeraGroup` entries (workspace + role, or org team) returned by
+`seqera_groups()` in `checks/seqera.py`: `megatests` from config plus
+`SEQERA_GROUPS`. Add, remove and the weekly removal sync all go through
+`checks/seqera.py` and only touch access the bot recorded in DynamoDB.
 
 ### On-call rotation
 
@@ -140,8 +149,11 @@ metadata is in YAML files. `db/hackathons.py` no longer exists.
 ### Seqera key patterns
 
 - `PK=SEQERA#<workspace-id> SK=USER#<slack-user-id>` — a workspace participant
-  the bot added (GitHub username, email used, Seqera participant ID). Read by
-  the weekly removal sync in `scheduler/seqera_jobs.py`.
+  the bot added (GitHub username, email used, Seqera participant ID, group
+  name). Read by `/nf-core seqera` and the weekly removal sync in
+  `scheduler/seqera_jobs.py`.
+- `PK=SEQERA#TEAM#<team-id> SK=USER#<slack-user-id>` — the same for an
+  organisation team (`participant_id` holds the team member ID).
 
 ### On-call key patterns
 
