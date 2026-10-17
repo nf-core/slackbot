@@ -333,7 +333,9 @@ Invite a user to the nf-core GitHub organisation and add them to the
 
 Right-click any message, select **More actions** > **Add to GitHub org** to
 invite the message author. This reads their Slack profile for a GitHub username,
-then sends the org invitation.
+then sends the org invitation. On a "GitHub Invitation Request" workflow message
+it reads the GitHub handle, and the optional Seqera Platform email, from the
+form answers instead.
 
 This works in threads (unlike slash commands, which Slack does not support in
 threads).
@@ -354,8 +356,14 @@ threads).
      `PUT /orgs/nf-core/memberships/{username}`
    - Adds the user to the **contributors** team via
      `PUT /orgs/nf-core/teams/contributors/memberships/{username}`
-4. **Thread reply** — posts a **visible** reply with the result (not ephemeral,
-   so the original requester can see it too)
+4. **Seqera workspace** — when the target is a known Slack user, adds them to
+   the `nf-core/megatests` workspace on Seqera Platform with read-only access
+   (new joiners and existing org members alike). Uses the Platform email from
+   the workflow form if given, otherwise their Slack email. See
+   [Deployment](deployment.md#seqera-megatests-workspace-access).
+5. **Thread reply** — posts a **visible** reply with the result (not ephemeral,
+   so the original requester can see it too). The welcome mentions megatests
+   access when it was granted; the caller gets a DM with the Seqera outcome.
 
 ### Error Handling
 

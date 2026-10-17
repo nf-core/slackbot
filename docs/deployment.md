@@ -70,7 +70,64 @@ aws --profile nf-core --region eu-west-1 ssm put-parameter \
   --name /nf-core-bot/SLACK_APP_TOKEN --type SecureString --value "xapp-..."
 aws --profile nf-core --region eu-west-1 ssm put-parameter \
   --name /nf-core-bot/GITHUB_TOKEN --type SecureString --value "github_pat_..."
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_TOKEN --type SecureString --value "<Seqera access token>"
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_ORG_ID --type SecureString --value "<nf-core org numeric ID>"
+aws --profile nf-core --region eu-west-1 ssm put-parameter \
+  --name /nf-core-bot/SEQERA_WORKSPACE_ID --type SecureString --value "<megatests workspace numeric ID>"
 ```
+
+#### Seqera megatests workspace access
+
+The Seqera token needs permission to add and remove workspace participants.
+Whenever `github add` (or the **Add to GitHub org** shortcut) runs for a Slack
+user, the bot adds them to the `nf-core/megatests` workspace with the
+`nf-core-read-only` custom role (`SEQERA_WORKSPACE_ROLE`). This happens for new
+joiners and for people already in the GitHub org.
+
+All three `SEQERA_*` parameters must exist in SSM **before** you deploy this
+stack. They are injected as ECS secrets, so if any is missing the task fails to
+start and the whole bot goes down, not just the Seqera step. (When running
+locally, leaving the `SEQERA_*` environment variables unset skips the step
+silently.)
+
+- **Email used:** the answer to the optional Platform email question on the
+  "GitHub Invitation Request" workflow form (see below), otherwise the member's
+  Slack email. Add the `users:read.email` Slack bot scope and reinstall the
+  Slack app for the Slack email lookup to work.
+- **Messages:** the public welcome tells new joiners they have read-only
+  megatests access. The core-team member who ran the command gets a DM with the
+  outcome: added, already a participant, or why it failed (no email on the Slack
+  profile, no Seqera account for that email, or a Seqera API error with its HTTP
+  status). Seqera's own error message is included in the DM. A 409 from the add
+  call is only reported as "already a participant" after a participant lookup
+  confirms it, because Seqera also uses 409 when an SSO organization won't
+  accept the user as a collaborator.
+- **Records:** each successful add is stored in the bot's DynamoDB table
+  (`PK=SEQERA#<workspace-id> SK=USER#<slack-user-id>`, with the GitHub username,
+  email used and Seqera participant ID). People who were already participants,
+  or were added by hand, are not recorded.
+
+**Workflow form question.** In Slack Workflow Builder, add an optional
+short-answer question to the "GitHub Invitation Request" form, for example
+_"Seqera Platform email (if different from your Slack email)"_. The bot picks up
+any question whose text mentions "Platform" or "Seqera" and "email", and uses
+the first email address in the answer. This is configured in Slack, not in this
+repo.
+
+**Weekly removal sync.** Every Monday at 09:00 UTC the bot checks each recorded
+participant against the nf-core GitHub org
+(`GET /orgs/nf-core/memberships/{username}`). Anyone with neither an active
+membership nor a pending invitation is removed from the megatests workspace and
+their record is deleted. Only people the bot recorded are touched, and only in
+the configured workspace. GitHub or Seqera errors for a person are logged and
+that person is skipped until the next run.
+
+**Dry run.** `SEQERA_REMOVAL_DRY_RUN` (plain environment variable in
+`infra/stacks/bot_stack.py`, default `true`) makes the removal sync log
+`[dry run] Would remove …` instead of removing anyone. Leave it on for the first
+week or two, check the CloudWatch logs, then set it to `false` and redeploy.
 
 Optional — a Workspace Admin/Owner user token enables writing members' GitHub
 usernames into their Slack profiles after an org invite (see

@@ -4,7 +4,8 @@ Triggered via right-click on a message > More actions > "Add to GitHub org".
 
 For regular user messages, reads the author's GitHub username from their Slack
 profile.  For workflow/bot messages (e.g. the "GitHub Invitation Request"
-workflow), parses the message text to extract the GitHub handle.
+workflow), parses the message text to extract the GitHub handle, plus an
+optional Seqera Platform email used for megatests workspace access.
 
 This works in threads (unlike slash commands), making it the preferred way to
 invite someone based on a message they posted.
@@ -41,6 +42,19 @@ _GITHUB_HANDLE_RE = re.compile(
 _WORKFLOW_REQUESTER_RE = re.compile(r"By\s+<@(U[A-Z0-9]+)(?:\|[^>]*)?>", re.IGNORECASE)
 
 
+# Pattern to capture the answer to the optional Seqera Platform email question,
+# e.g. "*Seqera Platform email (if different from your Slack email)*\nme@x.org".
+# Any question line mentioning "Platform" or "Seqera" and "email" (in any order) matches, so
+# the exact wording in Workflow Builder can change without breaking this.
+_PLATFORM_EMAIL_QUESTION_RE = re.compile(
+    r"^(?=[^\n\r]*\b(?:Platform|Seqera)\b)(?=[^\n\r]*\be-?mail\b)[^\n\r]*[\n\r]+[ \t]*([^\n\r]+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Slack renders emails as "<mailto:me@x.org|me@x.org>"; this finds the address either way.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
 def _handle_from_answer(answer: str) -> str | None:
     """Mine a single GitHub handle out of a free-text answer.
 
@@ -72,6 +86,16 @@ def _extract_github_handle_from_text(text: str) -> str | None:
     match = _GITHUB_HANDLE_RE.search(text)
     if match:
         return _handle_from_answer(match.group(1))
+    return None
+
+
+def _extract_platform_email_from_text(text: str) -> str | None:
+    """Return the optional Seqera Platform email from workflow message text, if one was given."""
+    match = _PLATFORM_EMAIL_QUESTION_RE.search(text)
+    if match:
+        email = _EMAIL_RE.search(match.group(1))
+        if email:
+            return email.group(0)
     return None
 
 
@@ -119,6 +143,9 @@ async def handle_add_member_shortcut(
     # workflow requester (the person who filled in the form).
     greeting_user_id: str | None = None
 
+    # Seqera Platform email from the workflow form; falls back to the Slack email.
+    seqera_email: str | None = None
+
     if target_user_id is not None:
         # Regular user message — resolve from Slack profile
         greeting_user_id = target_user_id
@@ -141,6 +168,7 @@ async def handle_add_member_shortcut(
         # Workflow/bot message — try to extract GitHub handle from the text
         github_username = _extract_github_handle_from_text(message_text)
         greeting_user_id = _extract_requester_from_text(message_text)
+        seqera_email = _extract_platform_email_from_text(message_text)
         if github_username is None:
             await client.chat_postEphemeral(
                 channel=channel_id,
@@ -162,4 +190,11 @@ async def handle_add_member_shortcut(
     async def _reply(text: str) -> None:
         await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
 
-    await invite_and_greet(github_username, caller_id, _reply, greeting_user_id=greeting_user_id, client=client)
+    await invite_and_greet(
+        github_username,
+        caller_id,
+        _reply,
+        greeting_user_id=greeting_user_id,
+        client=client,
+        seqera_email=seqera_email,
+    )

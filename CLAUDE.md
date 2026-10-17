@@ -83,6 +83,11 @@ Channel replies are wrapped in `_safe_reply()` which catches exceptions; on
 failure, `_reply_or_dm()` falls back to DMing the caller. On success the caller
 always receives a DM confirmation as a failsafe.
 
+The same flow adds the Slack user to the Seqera `nf-core/megatests` workspace
+(`checks/seqera.py`) before posting the welcome, and records the add in
+DynamoDB. `scheduler/seqera_jobs.py` removes recorded users who have left the
+GitHub org once a week (log-only while `SEQERA_REMOVAL_DRY_RUN` is on).
+
 ### On-call rotation
 
 The on-call system manages a weekly rotation for `@core-team` members. All
@@ -131,6 +136,12 @@ members have been assigned in the current window, it cycles through again.
 
 Note: The `PK=HACKATHON#<id> SK=META` pattern is no longer used. Hackathon
 metadata is in YAML files. `db/hackathons.py` no longer exists.
+
+### Seqera key patterns
+
+- `PK=SEQERA#<workspace-id> SK=USER#<slack-user-id>` — a workspace participant
+  the bot added (GitHub username, email used, Seqera participant ID). Read by
+  the weekly removal sync in `scheduler/seqera_jobs.py`.
 
 ### On-call key patterns
 
