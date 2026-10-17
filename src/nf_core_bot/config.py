@@ -27,6 +27,8 @@ _DEFAULTS: dict[str, str | None] = {
     "SEQERA_ORG_ID": None,
     "SEQERA_WORKSPACE_ID": None,
     "SEQERA_WORKSPACE_ROLE": "nf-core-read-only",
+    # Weekly removal job only logs who it would remove until set to "false".
+    "SEQERA_REMOVAL_DRY_RUN": "true",
     # DynamoDB
     "DYNAMODB_TABLE": "nf-core-bot",
     "DYNAMODB_ENDPOINT": None,  # None → real AWS

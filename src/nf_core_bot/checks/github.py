@@ -108,6 +108,30 @@ async def check_org_membership(username: str) -> GitHubResult:
     )
 
 
+async def get_org_membership_state(username: str) -> str | None:
+    """Return *username*'s org membership state: ``"active"``, ``"pending"`` or ``None``.
+
+    ``GET /orgs/{org}/memberships/{username}``
+
+    Unlike :func:`check_org_membership`, this sees pending invitations, so a
+    freshly invited user who hasn't accepted yet isn't mistaken for a leaver.
+    ``None`` means GitHub returned 404 (not a member and no pending invite).
+    Raises ``RuntimeError`` on any other status so callers never treat an API
+    failure as "not a member".
+    """
+    org = config.GITHUB_ORG
+    resp = await _github_get(f"/orgs/{org}/memberships/{username}")
+
+    if resp.status_code == 200:
+        state: str = resp.json().get("state", "unknown")
+        return state
+
+    if resp.status_code == 404:
+        return None
+
+    raise RuntimeError(f"Could not check membership for `{username}`: {resp.status_code} — {resp.text}")
+
+
 async def check_user_exists(username: str) -> GitHubResult:
     """Verify that a GitHub user account exists.
 

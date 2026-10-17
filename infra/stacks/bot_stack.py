@@ -162,6 +162,8 @@ class NfCoreBotStack(Stack):
             environment={
                 "GITHUB_ORG": "nf-core",
                 "SEQERA_WORKSPACE_ROLE": "nf-core-read-only",
+                # Flip to "false" once the dry-run logs look right.
+                "SEQERA_REMOVAL_DRY_RUN": "true",
                 "AWS_DEFAULT_REGION": "eu-west-1",
                 "DYNAMODB_TABLE": "nf-core-bot",
                 "CORE_TEAM_USERGROUP_HANDLE": "core-team",
