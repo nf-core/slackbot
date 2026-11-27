@@ -94,19 +94,6 @@ class TestRefreshCoreTeam:
         assert members == {"U1"}
 
 
-# ── get_usergroup_id ─────────────────────────────────────────────────
-
-
-class TestGetUsergroupId:
-    async def test_returns_subteam_id(self) -> None:
-        client = _make_client(members=["U1"])
-        assert await perms.get_usergroup_id(client, "core-team") == "S123"
-
-    async def test_returns_none_when_handle_unknown(self) -> None:
-        client = _make_client(group_handle="other-team")
-        assert await perms.get_usergroup_id(client, "core-team") is None
-
-
 # ── is_core_team ─────────────────────────────────────────────────────
 
 
@@ -132,34 +119,3 @@ class TestIsCoreTeam:
         importlib.reload(nf_core_bot.config)
 
         assert await perms.is_core_team(client, "U1") is True
-
-
-# ── is_maintainer / is_core_team_or_maintainers ──────────────────────
-
-
-class TestMaintainers:
-    def _two_group_client(self, core: list[str], maint: list[str]) -> AsyncMock:
-        client = AsyncMock()
-        client.usergroups_list.return_value = {
-            "usergroups": [
-                {"id": "S_CORE", "handle": "core-team"},
-                {"id": "S_MAINT", "handle": "maintainers-team"},
-            ]
-        }
-
-        async def _users(usergroup: str) -> dict[str, list[str]]:
-            return {"users": core if usergroup == "S_CORE" else maint}
-
-        client.usergroups_users_list.side_effect = _users
-        return client
-
-    async def test_is_maintainer_true(self) -> None:
-        client = self._two_group_client(core=["U_CORE"], maint=["U_MAINT"])
-        assert await perms.is_maintainer(client, "U_MAINT") is True
-        assert await perms.is_maintainer(client, "U_CORE") is False
-
-    async def test_either_group_grants_access(self) -> None:
-        client = self._two_group_client(core=["U_CORE"], maint=["U_MAINT"])
-        assert await perms.is_core_team_or_maintainers(client, "U_CORE") is True
-        assert await perms.is_core_team_or_maintainers(client, "U_MAINT") is True
-        assert await perms.is_core_team_or_maintainers(client, "U_NOBODY") is False

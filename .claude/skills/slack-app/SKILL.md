@@ -27,10 +27,10 @@ behind them.
 - **`src/nf_core_bot/commands/router.py`** — parses `/nf-core <sub> …` and
   dispatches to handlers; central place for `ack()` + permission gating.
 - **`src/nf_core_bot/permissions/checks.py`** — cached user-group membership
-  (`is_core_team`, `is_core_team_or_maintainers`) and `get_usergroup_id` (the
-  subteam ID used to build `@group` mentions).
-- **`src/nf_core_bot/proposals/slack_utils.py`** — channel resolution, mention
-  building, and Block Kit message posting. Good reference for formatting.
+  (`is_core_team`, `refresh_usergroup`, which also returns the group's subteam
+  ID used to build `@group` mentions).
+- **`src/nf_core_bot/slack_utils.py`** — `resolve_channel_id`: channel name →
+  ID, cached for the process lifetime.
 - **`src/nf_core_bot/forms/`** — the multi-step modal flow (views).
 - **`docs/slack-app-setup.md`** — the manifest: scopes, events, shortcuts.
 
@@ -46,27 +46,26 @@ through `asyncio.to_thread`. Don't call blocking I/O directly in a handler.
 
 Slack expects an acknowledgement within ~3 seconds or it shows the user an error
 and may retry the event. So: **`ack()` immediately, then do slow work in the
-background.** Never run a multi-second task (GitHub fetch, Bedrock call, etc.)
-before acking.
+background.** Never run a multi-second task (a large GitHub fetch, an LLM call,
+etc.) before acking.
 
-The repo's pattern: the router acks once, and slow handlers spawn a tracked
-background task instead of awaiting inline — see
-`proposals/__init__.py::spawn()` and its use in `app.py::on_message`,
-`commands/proposals/review.py`, and `commands/proposals/shortcut.py`. Use that
-helper (it keeps a strong reference so the task isn't garbage-collected and logs
-exceptions). For events, Bolt auto-acks; still keep the handler body cheap and
-offload work to `spawn()`.
+The router acks once before dispatching. If a handler's work can take longer
+than a few seconds, run it with `asyncio.create_task` rather than awaiting it
+inline, and keep a strong reference to the task (asyncio only keeps weak ones,
+so an unreferenced task can be garbage-collected mid-run) and log its
+exceptions. `app.py::_start` does this for the long-running schedulers. For
+events, Bolt auto-acks; still keep the handler body cheap.
 
 ## Registering interactions
 
-| Decorator                    | Fires on                                                               | Example in repo                                |
-| ---------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
-| `@app.command("/nf-core")`   | slash command                                                          | `app.py` → `dispatch`                          |
-| `@app.event("message")`      | channel messages (needs `message.channels` event + `channels:history`) | `app.py::on_message` → `proposals/listener.py` |
-| `@app.action(action_id)`     | button / interactive component                                         | `app.py` admin button                          |
-| `@app.view(callback_id)`     | modal submission (`callback_id` can be a regex)                        | `app.py` registration steps                    |
-| `@app.shortcut(callback_id)` | global/message shortcut                                                | `app.py::shortcut_*`                           |
-| `@app.options(action_id)`    | external-select type-ahead                                             | `app.py::on_country_suggestions`               |
+| Decorator                    | Fires on                                                               | Example in repo                  |
+| ---------------------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| `@app.command("/nf-core")`   | slash command                                                          | `app.py` → `dispatch`            |
+| `@app.event("message")`      | channel messages (needs `message.channels` event + `channels:history`) | none (not subscribed)            |
+| `@app.action(action_id)`     | button / interactive component                                         | `app.py` admin button            |
+| `@app.view(callback_id)`     | modal submission (`callback_id` can be a regex)                        | `app.py` registration steps      |
+| `@app.shortcut(callback_id)` | global/message shortcut                                                | `app.py::shortcut_*`             |
+| `@app.options(action_id)`    | external-select type-ahead                                             | `app.py::on_country_suggestions` |
 
 A handler receives Bolt-injected args by name (`ack`, `respond`, `client`,
 `command`, `body`, `event`, `view`, `shortcut`, `say`). Take only what you need.
@@ -85,10 +84,11 @@ must appear and _who_ should see it:
 
 **The self-DM trap:** a slash command run in a user's own "Jot to self" DM has a
 `channel_id` the bot is _not_ in, so `chat_postMessage` 404s with
-`channel_not_found`. That's exactly why slash replies use `respond` (response
-URL) here — see `commands/proposals/review.py`. If you ever post a slash result
-with `chat_postMessage(channel=command["channel_id"])`, you've reintroduced this
-bug.
+`channel_not_found`. Either reply with `respond` (response URL), or, if the
+result must be a normal public message, catch that error and fall back to a DM —
+see `commands/security/summary.py`. A bare
+`chat_postMessage(channel=command["channel_id"])` with no fallback reintroduces
+this bug.
 
 ## Formatting messages
 
@@ -104,11 +104,10 @@ literal `-` / `*` characters" or "the bullets don't nest":
   **`rich_text`** block (the only way to guarantee nested/indented bullets).
 
 For anything with bullets, headings, or nesting, build Block Kit, don't send
-mrkdwn text. See `proposals/slack_utils.py::build_review_blocks` for the working
-pattern (a `section` header carrying the mention + a `markdown` body block + a
-`context` footer, posted as one message). **Read `references/block-kit.md`** for
-the full block reference, char limits, the rich_text nesting recipe, and the
-mention-rendering caveat.
+mrkdwn text. A good shape is one message with a `section` header carrying any
+mention, a `markdown` body block, and a `context` footer. **Read
+`references/block-kit.md`** for the full block reference, char limits, the
+rich_text nesting recipe, and the mention-rendering caveat.
 
 ## Modals (views)
 
@@ -137,19 +136,17 @@ reinstall (the bot token does not rotate).
 - **Nested bullets need a `markdown` or `rich_text` block.** A `•`/`-` in mrkdwn
   text is literal. (This caused a real formatting bug here.)
 - **Keep group mentions in a `section` (mrkdwn) block.** `<!subteam^ID>`
-  reliably notifies there; in a `markdown` block it may render but not ping.
-  That's why `build_review_blocks` puts the mention in the header section, not
-  the body.
-- **Use `respond` for slash replies**, not `chat_postMessage` to the invocation
-  channel (self-DM `channel_not_found`, above).
+  reliably notifies there; in a `markdown` block it may render but not ping. Put
+  the mention in a header section, not the body.
+- **Use `respond` for slash replies**, or handle `channel_not_found` with a DM
+  fallback if you post with `chat_postMessage` (self-DM trap, above).
 - **Don't let prettier touch Slack mrkdwn templates.** Prettier rewrites
   `*bold*` → `_italic_` and reflows line structure, both of which break Slack
   rendering. Slack text templates and bundled skills live under paths listed in
   `.prettierignore` for this reason — keep new ones there too.
-- **`@app.event("message")` fires on every message** in subscribed channels.
-  Filter cheaply and ignore the bot's own posts (resolve identity via
-  `auth_test`) to avoid loops — see `proposals/listener.py::should_consider` and
-  `_own_message`.
+- **`@app.event("message")` fires on every message** in subscribed channels. If
+  you subscribe to it, filter cheaply and ignore the bot's own posts (resolve
+  identity once via `auth_test` and cache it) to avoid loops.
 - **Resolving a public channel by name needs `channels:read`** (private:
   `groups:read`); the bot must also be invited to the channel to read/post.
 
@@ -159,7 +156,7 @@ Handlers are tested by injecting `AsyncMock()` for `client`/`ack`/`respond` and
 asserting on the calls (e.g. `respond.await_args.kwargs["response_type"]`, or
 that `client.chat_postMessage` was awaited with the expected blocks). DynamoDB
 is mocked with `moto`; shared env defaults live in `tests/conftest.py`. See
-`tests/test_proposals_command.py` and `tests/test_proposals_listener.py` for
+`tests/test_security_command.py` and `tests/test_add_member_shortcut.py` for
 patterns to copy.
 
 ## External references

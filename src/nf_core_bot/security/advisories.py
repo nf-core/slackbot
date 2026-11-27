@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from nf_core_bot import config
 from nf_core_bot.checks.github import SecurityAdvisory, list_all_org_advisories
 from nf_core_bot.db.advisories import get_known_advisories, save_advisory_state
-from nf_core_bot.proposals.slack_utils import resolve_channel_id
+from nf_core_bot.slack_utils import resolve_channel_id
 
 if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient

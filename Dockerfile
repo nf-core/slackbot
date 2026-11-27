@@ -6,26 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# ── System tools used by the proposal-review skill (read-only research) ──
-# gh  — GitHub CLI (issue/repo/search reads)   jq — JSON filtering   git — gh dep
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg jq git \
-    && mkdir -p -m 755 /etc/apt/keyrings \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-        -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-        > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
-
-# nf-core CLI (module/subworkflow/pipeline lookups). Installed via pipx in its own
-# virtualenv so its large dependency tree never conflicts with the bot's deps.
-ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
-RUN pip install --no-cache-dir pipx \
-    && pipx install "nf-core>=3,<4"
-
 # Install dependencies first (layer caching)
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
@@ -40,12 +20,5 @@ RUN pip install --no-cache-dir -e .
 # Run as non-root
 RUN useradd --create-home botuser
 USER botuser
-
-# Pre-warm the nf-core CLI's local clone of the nf-core/modules repo (which also
-# holds the subworkflows). The first `nf-core modules info/list` otherwise clones
-# it at runtime (~2 min), stalling the first proposal review of each task. Run as
-# `botuser` so the cache lands in the HOME the container actually runs under.
-# Best-effort: a transient network hiccup at build time must not fail the build.
-RUN nf-core modules list remote > /dev/null 2>&1 || true
 
 CMD ["python", "-m", "nf_core_bot"]

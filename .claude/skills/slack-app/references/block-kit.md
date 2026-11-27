@@ -62,18 +62,18 @@ with several blocks** over posting multiple messages or chunked thread replies �
 it reads as a single coherent post. Only split into multiple markdown blocks if
 a body exceeds 12,000 chars.
 
-## The repo's review message (working example)
+## A good message shape
 
-`proposals/slack_utils.py::build_review_blocks` assembles, in one message:
+For a rich post that also needs to notify a group, use one message with:
 
-1. a `section` (mrkdwn) header — the linked title + the `<!subteam^ID>` mention
+1. a `section` (mrkdwn) header — a linked title + the `<!subteam^ID>` mention
    (so it notifies);
-2. one or more `markdown` blocks — the model's Markdown review (bullets,
-   nesting, bold, fenced code all render);
-3. a `context` footer — the automated-review disclaimer.
+2. one or more `markdown` blocks — the body (bullets, nesting, bold, fenced code
+   all render);
+3. a `context` footer — any disclaimer or small print.
 
-That split exists precisely so the mention notifies (section) while the body
-gets proper Markdown rendering (markdown block).
+That split exists so the mention notifies (section) while the body gets proper
+Markdown rendering (markdown block).
 
 ## Nested bullets via rich_text (when markdown nesting isn't enough)
 

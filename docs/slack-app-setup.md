@@ -38,7 +38,6 @@ public URL.
 | `files:write`        | Upload CSV exports (site organiser downloads)                                 |
 | `groups:read`        | Resolve the on-call `#core` private channel by name for announcements + topic |
 | `groups:write.topic` | Set the `#core` channel topic to reflect the current on-call assignee         |
-| `channels:history`   | Read #new-pipelines messages to auto-trigger pipeline-proposal reviews        |
 
 After changing scopes you must **reinstall the app to the workspace** for the
 new scopes to take effect (see [Install the App](#install-the-app) below). The
@@ -90,32 +89,20 @@ If `#core` is a public channel in your workspace, swap `groups:read` →
    - **Escape channels, users, and links sent to your app:** check this box
 4. Click **Save**
 
-## Enable Event Subscriptions
+## Add the Message Shortcut
 
-The bot listens for messages in #new-pipelines to auto-trigger proposal reviews.
-
-1. Go to **Features** > **Event Subscriptions** (left sidebar)
-2. Toggle **Enable Events** on (Socket Mode handles the request URL)
-3. Under **Subscribe to bot events**, add `message.channels`
-4. Save, then **reinstall the app** for the change to take effect
-5. **Invite the bot to #new-pipelines** (`/invite @nf-core-bot`) — it only
-   receives messages from channels it is a member of
-
-## Add the Message Shortcuts
-
-Message shortcuts let members right-click a message to act on it. These work
+Message shortcuts let members right-click a message to act on it. They work
 everywhere, including threads (unlike slash commands).
 
 1. Go to **Features** > **Interactivity & Shortcuts** (left sidebar)
 2. Ensure **Interactivity** is toggled on (Socket Mode handles the request URL)
 3. Under **Shortcuts**, click **Create New Shortcut** and select **On messages**
 
-Create two shortcuts:
+Create this shortcut:
 
-| Name                       | Callback ID                | Purpose                                                             |
-| -------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| `Add to GitHub org`        | `add_to_github_org`        | Invite this message's author to the nf-core GitHub org              |
-| `Review pipeline proposal` | `review_pipeline_proposal` | Review the proposal linked in this message (posts a threaded reply) |
+| Name                | Callback ID         | Purpose                                                |
+| ------------------- | ------------------- | ------------------------------------------------------ |
+| `Add to GitHub org` | `add_to_github_org` | Invite this message's author to the nf-core GitHub org |
 
 ## Install the App
 
