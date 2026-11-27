@@ -29,7 +29,7 @@ from nf_core_bot.db.oncall import (
     update_roster_assignment,
 )
 from nf_core_bot.permissions.checks import refresh_core_team
-from nf_core_bot.proposals.slack_utils import resolve_channel_id
+from nf_core_bot.slack_utils import resolve_channel_id
 
 if TYPE_CHECKING:
     from slack_sdk.web.async_client import AsyncWebClient

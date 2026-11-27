@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ── User-group cache ─────────────────────────────────────────────────
-# Membership of Slack user-groups (``@core-team``, ``@maintainers-team``) is
+# Membership of Slack user-groups (e.g. ``@core-team``) is
 # fetched from the Slack API and cached for ``CACHE_TTL`` seconds, keyed by
 # handle.  An async lock prevents concurrent requests firing redundant calls.
 
@@ -108,12 +108,6 @@ async def refresh_core_team(client: AsyncWebClient, usergroup_handle: str) -> se
     return members
 
 
-async def get_usergroup_id(client: AsyncWebClient, handle: str) -> str | None:
-    """Return the ``S…`` subteam ID for *handle*, for ``<!subteam^ID>`` mentions."""
-    group_id, _ = await refresh_usergroup(client, handle)
-    return group_id
-
-
 async def is_core_team(client: AsyncWebClient, user_id: str, usergroup_handle: str | None = None) -> bool:
     """Return True if *user_id* is in the @core-team user-group.
 
@@ -125,20 +119,6 @@ async def is_core_team(client: AsyncWebClient, user_id: str, usergroup_handle: s
         usergroup_handle = config.CORE_TEAM_USERGROUP_HANDLE or "core-team"
     _, members = await refresh_usergroup(client, usergroup_handle)
     return user_id in members
-
-
-async def is_maintainer(client: AsyncWebClient, user_id: str) -> bool:
-    """Return True if *user_id* is in the @maintainers-team user-group."""
-    from nf_core_bot import config
-
-    handle = config.MAINTAINERS_USERGROUP_HANDLE or "maintainers-team"
-    _, members = await refresh_usergroup(client, handle)
-    return user_id in members
-
-
-async def is_core_team_or_maintainers(client: AsyncWebClient, user_id: str) -> bool:
-    """Return True if *user_id* is in either @core-team or @maintainers-team."""
-    return await is_core_team(client, user_id) or await is_maintainer(client, user_id)
 
 
 async def is_site_organiser(user_id: str, hackathon_id: str, site_id: str) -> bool:

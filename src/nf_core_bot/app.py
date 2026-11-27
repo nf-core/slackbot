@@ -22,15 +22,12 @@ from nf_core_bot.commands.hackathon.admin import (
     handle_admin_edit_site_picker,
     handle_admin_site_submission,
 )
-from nf_core_bot.commands.proposals.shortcut import handle_review_proposal_shortcut
 from nf_core_bot.commands.router import dispatch, dispatch_hackathon
 from nf_core_bot.db import client as db_client
 from nf_core_bot.forms.handler import (
     handle_country_suggestions,
     handle_registration_step,
 )
-from nf_core_bot.proposals import spawn as spawn_proposal_task
-from nf_core_bot.proposals.listener import handle_proposal_message, should_consider
 from nf_core_bot.scheduler.oncall_jobs import run_oncall_scheduler
 from nf_core_bot.security.advisories import run_security_scheduler
 
@@ -119,27 +116,6 @@ async def on_country_suggestions(ack, body):  # type: ignore[no-untyped-def]
 async def shortcut_add_to_github_org(ack, shortcut, client):  # type: ignore[no-untyped-def]
     """Message shortcut — right-click a message → Add to GitHub org."""
     await handle_add_member_shortcut(ack, shortcut, client)
-
-
-@app.shortcut("review_pipeline_proposal")
-async def shortcut_review_pipeline_proposal(ack, shortcut, client):  # type: ignore[no-untyped-def]
-    """Message shortcut — right-click a proposal post → Review pipeline proposal."""
-    await handle_review_proposal_shortcut(ack, shortcut, client)
-
-
-# ── Channel messages (auto-trigger proposal reviews) ─────────────────
-
-
-@app.event("message")
-async def on_message(event, client):  # type: ignore[no-untyped-def]
-    """Watch channel messages; auto-review new-pipeline proposal announcements.
-
-    A cheap synchronous gate rejects the vast majority of messages before any
-    task is allocated; the review itself runs in the background so it never
-    blocks the Socket-Mode ack.
-    """
-    if should_consider(event):
-        spawn_proposal_task(handle_proposal_message(event, client))
 
 
 # ── Startup ──────────────────────────────────────────────────────────

@@ -2,8 +2,7 @@
 
 Restricted to ``@core-team`` (checked by the router). Posts **publicly** in
 the conversation where the command was run — a channel or DM — so the whole
-team can see the result, not just the caller, mirroring
-``commands/proposals/review.py``'s delivery pattern.
+team can see the result, not just the caller.
 """
 
 from __future__ import annotations

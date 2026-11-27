@@ -42,7 +42,7 @@ while True:
         break
 ```
 
-Reference: `proposals/slack_utils.py::resolve_channel_id`.
+Reference: `slack_utils.py::resolve_channel_id`.
 
 ## Caching (avoid hammering the API on hot paths)
 
@@ -50,13 +50,11 @@ Slack rate-limits per method, and some lookups (channel-name→ID, group
 membership) are needed on frequently-fired events. This repo caches them:
 
 - **Channel IDs** — resolved once and kept for the process lifetime
-  (`proposals/slack_utils.py::_channel_cache`,
+  (`slack_utils.py::_channel_cache`,
   `scheduler/oncall_jobs.py::_resolve_channel_id`).
 - **User-group membership** — cached per handle with a TTL
   (`permissions/checks.py`, `CACHE_TTL = 300`s) behind an `asyncio.Lock` so
   concurrent handlers don't all refetch.
-- **Bot identity** — `auth_test` result cached so the message listener can skip
-  its own posts cheaply (`proposals/listener.py::_own_message`).
 
 When you add a new per-event lookup, cache it the same way rather than calling
 the API on every event.
@@ -64,11 +62,11 @@ the API on every event.
 ## Building mentions
 
 A user-group ("@core-team") mention is `<!subteam^{id}>`, where `{id}` is the
-group's `S…` ID. Resolve it via `permissions/checks.py::get_usergroup_id` (which
-goes through the cached `usergroups_list`) — see
-`proposals/slack_utils.py::core_team_mention`. Mentions reliably notify from a
-`section`/mrkdwn block; see `references/block-kit.md` for the rich_text mention
-elements if you need a ping inside structured content.
+group's `S…` ID. `permissions/checks.py::refresh_usergroup` returns it
+(`group_id, members = await refresh_usergroup(client, "core-team")`) through the
+cached `usergroups_list`. Mentions reliably notify from a `section`/mrkdwn
+block; see `references/block-kit.md` for the rich_text mention elements if you
+need a ping inside structured content.
 
 ## Manifest changes (scopes / events / shortcuts)
 
